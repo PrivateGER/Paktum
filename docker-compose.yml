@@ -10,9 +10,7 @@ services:
     image: redis:6.2.6
     restart: unless-stopped
   image_processor:
-    build:
-        context: .
-        dockerfile: Dockerfile
+    image: privateger/paktum:master
     restart: unless-stopped
     volumes:
       - "images:/images/"
@@ -26,9 +24,7 @@ services:
       - "--meilikey=meiliKey"
       - "--imageDir=/images/"
   image_scraper:
-    build:
-        context: .
-        dockerfile: Dockerfile
+    image: privateger/paktum:master
     restart: "no"
     depends_on:
       - redis
