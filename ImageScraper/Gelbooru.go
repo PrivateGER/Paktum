@@ -3,7 +3,7 @@ package ImageScraper
 import (
 	"Paktum/TaskManager"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -61,7 +61,7 @@ func scrape(tags []string) (error, []Image) {
 	if err != nil {
 		return err, nil
 	}
-	req.Header.Set("User-Agent", "Paktum Scraer/Importer")
+	req.Header.Set("User-Agent", "Paktum Scraper/Importer")
 
 	res, err := httpClient.Do(req)
 
@@ -76,7 +76,7 @@ func scrape(tags []string) (error, []Image) {
 		defer res.Body.Close()
 	}
 
-	body, readErr := ioutil.ReadAll(res.Body)
+	body, readErr := io.ReadAll(res.Body)
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
@@ -94,9 +94,9 @@ func scrape(tags []string) (error, []Image) {
 			Filename:    post.Image,
 			Tags:        strings.Split(post.Tags, " "),
 			Description: post.Title,
+			FileURL:     post.FileURL,
 		})
 	}
-
 
 	return nil, images
 }
@@ -109,5 +109,3 @@ func Gelbooru(tags []string, taskuid string) (error, []Image) {
 
 	return err, images
 }
-
-
