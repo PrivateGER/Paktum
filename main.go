@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/meilisearch/meilisearch-go"
 	"github.com/schollz/progressbar/v3"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
@@ -20,6 +21,21 @@ import (
 	"sync"
 	"time"
 )
+
+func init() {
+	lvl, ok := os.LookupEnv("LOG_LEVEL")
+	// LOG_LEVEL not set, let's default to debug
+	if !ok {
+		lvl = "debug"
+	}
+	// parse string, this is built-in feature of logrus
+	ll, err := log.ParseLevel(lvl)
+	if err != nil {
+		ll = log.DebugLevel
+	}
+	// set global log level
+	log.SetLevel(ll)
+}
 
 func main() {
 	var mode string
@@ -44,10 +60,6 @@ func main() {
 	// server mode
 	var port int
 	flag.IntVar(&port, "port", 9000, "The port to run the server on")
-
-	// scrape mode
-	var sqlite string
-	flag.StringVar(&sqlite, "sqlite", "paktum.db", "The sqlite database to connect to")
 
 	flag.Parse()
 
@@ -118,7 +130,7 @@ func main() {
 		}
 
 	} else if mode == "process" {
-		println("Process mode launching")
+		log.Info("Process mode launching, ingesting data from " + redisHostname)
 
 		// read data from redis
 		// decode gob
@@ -130,20 +142,16 @@ func main() {
 			PrimaryKey: "ID",
 		})
 		if err != nil {
-			fmt.Println("Failed to create MeiliSearch index:", err)
-			os.Exit(1)
-			return
+			log.Fatal("Failed to create MeiliSearch index:", err)
 		}
 		if !waitForMeilisearchTask(task, meiliClient) {
-			os.Exit(1)
-			return
+			log.Fatal("Failed to create MeiliSearch index")
 		}
 
 		imageCollection := meiliClient.Index("images")
 		task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring"})
 		if err != nil {
-			fmt.Println("Failed to update filterable attributes:", err)
-			return
+			log.Fatal("Failed to update filterable attributes:", err)
 		}
 		if !waitForMeilisearchTask(task, meiliClient) {
 			os.Exit(1)
@@ -151,23 +159,24 @@ func main() {
 		}
 
 		for {
+			// read from redis
+			log.Info("Sending BLPOP to redis at key paktum:metadata_process")
 			result, err := redisClient.BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
+			log.Info("Received BLPOP response from redis")
 			if err != nil {
-				if err == redis.Nil {
-					//println("No data in redis in 180s, re-fetching")
-				} else {
-					println("Error reading from redis:", err.Error())
+				if err != redis.Nil {
+					log.Error("Error reading from redis:", err.Error())
 				}
 				continue
 			}
 
-			println("Got", len(result), "items from redis")
+			log.Debug("Got", len(result), "items from redis")
 
 			var images []ImageScraper.Image
 			dec := gob.NewDecoder(bytes.NewBuffer([]byte(result[1])))
 			err = dec.Decode(&images)
 			if err != nil {
-				println("Failed to decode image gob:", err.Error())
+				log.Error("Failed to decode image gob:", err.Error())
 				continue
 			}
 			println("Decoded", len(images), "images")
@@ -175,9 +184,18 @@ func main() {
 			var wg sync.WaitGroup
 			pbar := progressbar.Default(int64(len(images)), "Downloading...")
 
+			type ProcessedImages struct {
+				ImageIDs map[string]string
+				mutex    sync.Mutex
+			}
+			processedImages := ProcessedImages{
+				ImageIDs: make(map[string]string),
+				mutex:    sync.Mutex{},
+			}
+
 			for _, image := range images {
 				wg.Add(1)
-				go func(image ImageScraper.Image, wg *sync.WaitGroup, imageCollection *meilisearch.Index, pbar *progressbar.ProgressBar) {
+				go func(image ImageScraper.Image, wg *sync.WaitGroup, imageCollection *meilisearch.Index, processedImages *ProcessedImages, pbar *progressbar.ProgressBar) {
 					// check if image already exists
 					// if it does, skip
 					// if it doesn't, download and add to meili
@@ -188,14 +206,23 @@ func main() {
 
 					md5 := strings.TrimSuffix(image.Filename, filepath.Ext(image.Filename))
 
-					if imageExists(imageCollection, md5) {
-						println("Image", md5, "already exists, skipping")
+					processedImages.mutex.Lock()
+					if _, ok := processedImages.ImageIDs[md5]; ok {
+						processedImages.mutex.Unlock()
+						log.Info("Found MD5 already being processed, duplicate image in queue, skipping...")
 						return
 					}
+					if imageExists(imageCollection, md5) {
+						processedImages.mutex.Unlock()
+						log.Info("Image", md5, "already exists, skipping...")
+						return
+					}
+					processedImages.ImageIDs[md5] = image.Filename
+					processedImages.mutex.Unlock()
 
 					err := downloadImage(image.FileURL, imageDir, image.Filename)
 					if err != nil {
-						println("Failed to download image", image.Filename)
+						log.Error("Failed to download image", image.Filename)
 						return
 					}
 
@@ -213,7 +240,7 @@ func main() {
 						Tags:      image.Tags,
 						Tagstring: strings.Join(image.Tags, " "),
 					}})
-				}(image, &wg, imageCollection, pbar)
+				}(image, &wg, imageCollection, &processedImages, pbar)
 			}
 
 			wg.Wait()
@@ -223,15 +250,18 @@ func main() {
 }
 
 func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
+	filter := []string{fmt.Sprintf(`ID = %s`, md5)}
+
+	log.Trace("Constructed meilisearch filter:", filter)
 	search, err := meiliIndex.Search("", &meilisearch.SearchRequest{
-		Filter: []string{fmt.Sprintf(`ID = %s`, md5)},
+		Filter: filter,
 	})
 	if err != nil {
-		println("Failed to search meili:", err.Error())
+		log.Error("Failed to search meili:", err.Error())
 		return false
 	}
 	if len(search.Hits) != 0 {
-		println("Image already exists, skipping")
+		log.Info("Image already exists, skipping")
 		return true
 	}
 	return false
@@ -240,19 +270,19 @@ func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
 func downloadImage(url string, imageDir string, filename string) error {
 	temporaryImageFile, err := os.CreateTemp(imageDir, "temp-paktum-")
 	if err != nil {
-		println("Failed to create file:", err.Error())
+		log.Error("Failed to create file:", err.Error())
 		return err
 	}
 
 	resp, err := http.Get(url)
 	if err != nil {
-		println("Failed to download image:", err.Error())
+		log.Error("Failed to download image:", err.Error())
 		return err
 	}
 
 	_, err = io.Copy(temporaryImageFile, resp.Body)
 	if err != nil {
-		println("Failed to write data into image:", err.Error())
+		log.Error("Failed to write data into image:", err.Error())
 		return err
 	}
 	err = temporaryImageFile.Close()
@@ -263,7 +293,7 @@ func downloadImage(url string, imageDir string, filename string) error {
 	// rename temp image file to proper name
 	err = os.Rename(temporaryImageFile.Name(), imageDir+"/"+filename)
 	if err != nil {
-		println("Failed to move image:", err.Error())
+		log.Error("Failed to move image:", err.Error())
 		return err
 	}
 
@@ -274,7 +304,7 @@ func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Clie
 	for {
 		task, err := client.GetTask(info.TaskUID)
 		if err != nil {
-			fmt.Println("Failed to get task:", err)
+			log.Fatal("Failed to get task:", err)
 			return false
 		}
 		if task.Status == "failed" {

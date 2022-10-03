@@ -1,0 +1,40 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v0.28.1
+    restart: unless-stopped
+    volumes:
+      - ./data.ms:/data.ms
+    environment:
+      MEILI_MASTER_KEY: 'meiliKey'
+  redis:
+    image: redis:6.2.6
+    restart: unless-stopped
+  image_processor:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - "images:/images/"
+    depends_on:
+      - redis
+      - meilisearch
+    command:
+      - "--mode=process"
+      - "--redis=redis:6379"
+      - "--meilihost=http://meilisearch:7700"
+      - "--meilikey=meiliKey"
+      - "--imageDir=/images/"
+  image_scraper:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    restart: "no"
+    depends_on:
+      - redis
+    command:
+      - "--mode=scrape"
+      - "--redis=redis:6379"
+
+volumes:
+    images:

@@ -3,8 +3,8 @@ package ImageScraper
 import (
 	"Paktum/TaskManager"
 	"encoding/json"
+	log "github.com/sirupsen/logrus"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -50,8 +50,9 @@ type GelbooruPage struct {
 	} `json:"post"`
 }
 
-func scrape(tags []string) (error, []Image) {
-	url := "https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=" + strings.Join(tags, "+")
+func scrape(tags []string, page uint) (error, []Image) {
+	url := "https://gelbooru.com/index.php?page=dapi&s=post&q=index&pid=" + strconv.Itoa(int(page)) + "&json=1&tags=" + strings.Join(tags, "+")
+	log.Trace("Requesting Gelbooru page with URL: ", url)
 
 	httpClient := http.Client{
 		Timeout: time.Second * 5,
@@ -103,9 +104,24 @@ func scrape(tags []string) (error, []Image) {
 
 func Gelbooru(tags []string, taskuid string) (error, []Image) {
 	TaskManager.SetTaskStatus(taskuid, "In Progress")
-	err, images := scrape(tags)
+	imageList := make([]Image, 50*5)
+
+	for i := 0; i < 5; i++ {
+		err, images := scrape(tags, uint(i))
+		if err != nil {
+			log.Error("Failed to scrape Gelbooru: ", err)
+			return err, nil
+		}
+		log.Info("Got ", len(images), " images from Gelbooru tags ", tags, ", page ", i)
+		imageList = append(imageList, images...)
+		if len(imageList) == 0 {
+			log.Info("Reached end of Gelbooru tag", tags, " at page ", i)
+			break
+		}
+	}
+
 	TaskManager.SetTaskStatus(taskuid, "Done")
 	TaskManager.SetTaskDone(taskuid)
 
-	return err, images
+	return nil, imageList
 }
