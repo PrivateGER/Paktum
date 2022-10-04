@@ -2,8 +2,10 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v0.28.1
     restart: unless-stopped
+    ports:
+      - 7700:7700
     volumes:
-      - ./data.ms:/data.ms
+      - meilisearch-data:/data.ms
     environment:
       MEILI_MASTER_KEY: 'meiliKey'
   redis:
@@ -31,6 +33,20 @@ services:
     command:
       - "--mode=scrape"
       - "--redis=redis:6379"
+    profiles:
+      - donotstart
+  image_cleanup:
+    image: privateger/paktum:master
+    restart: "no"
+    depends_on:
+      - meilisearch
+    command:
+      - "--mode=cleanup"
+      - "--meilihost=http://meilisearch:7700"
+      - "--meilikey=meiliKey"
+    profiles:
+      - donotstart
 
 volumes:
     images:
+    meilisearch-data:
