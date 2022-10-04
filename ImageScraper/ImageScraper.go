@@ -6,6 +6,7 @@ type Image struct {
 	FileURL     string
 	Tags        []string
 	Description string
+	Rating      string
 }
 
 func Scrape(tags []string, taskuid string) (error, []Image) {

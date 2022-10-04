@@ -93,9 +93,10 @@ func scrape(tags []string, page uint) (error, []Image) {
 		images = append(images, Image{
 			ID:          string(strconv.Itoa(post.ID)),
 			Filename:    post.Image,
+			FileURL:     post.FileURL,
 			Tags:        strings.Split(post.Tags, " "),
 			Description: post.Title,
-			FileURL:     post.FileURL,
+			Rating:      post.Rating,
 		})
 	}
 
@@ -104,7 +105,7 @@ func scrape(tags []string, page uint) (error, []Image) {
 
 func Gelbooru(tags []string, taskuid string) (error, []Image) {
 	TaskManager.SetTaskStatus(taskuid, "In Progress")
-	imageList := make([]Image, 50*5)
+	imageList := make([]Image, 0)
 
 	for i := 0; i < 5; i++ {
 		err, images := scrape(tags, uint(i))
@@ -114,8 +115,8 @@ func Gelbooru(tags []string, taskuid string) (error, []Image) {
 		}
 		log.Info("Got ", len(images), " images from Gelbooru tags ", tags, ", page ", i)
 		imageList = append(imageList, images...)
-		if len(imageList) == 0 {
-			log.Info("Reached end of Gelbooru tag", tags, " at page ", i)
+		if len(images) == 0 {
+			log.Info("Reached end of Gelbooru tag ", tags, " at page ", i)
 			break
 		}
 	}

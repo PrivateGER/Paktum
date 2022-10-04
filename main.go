@@ -1,24 +1,15 @@
 package main
 
 import (
-	"Paktum/ImageScraper"
-	"bufio"
 	"bytes"
-	"context"
-	"encoding/gob"
 	"flag"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/meilisearch/meilisearch-go"
-	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 	"time"
 )
 
@@ -39,7 +30,7 @@ func init() {
 
 func main() {
 	var mode string
-	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', or 'server'")
+	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
 	// redis is shared by server and scrape mode and used as a transfer layer
 	var redisHostname string
@@ -63,8 +54,8 @@ func main() {
 
 	flag.Parse()
 
-	if mode != "scrape" && mode != "server" && mode != "process" {
-		fmt.Println("Please choose either scraping or server mode")
+	if mode != "scrape" && mode != "server" && mode != "process" && mode != "cleanup" {
+		log.Error("Please choose either scraping or server mode")
 		flag.Usage()
 		os.Exit(1)
 		return
@@ -81,171 +72,11 @@ func main() {
 	})
 
 	if mode == "scrape" {
-		println("Scraping mode launching")
-
-		// read from stdin until EOF
-		// for each line, add the space-seperated tags into an array
-		// call scrape with the array
-
-		tags := readStdinTagsIntoArray()
-
-		progress := make(chan int, len(tags))
-		pbar := progressbar.Default(int64(len(tags)), "Fetch tag metadata...")
-
-		for _, tag := range tags {
-			go func(tag []string) {
-				err, images := ImageScraper.Scrape(tag, uuid.New().String())
-				if err != nil {
-					fmt.Println(err)
-					progress <- 1
-					return
-				}
-
-				//encode image array into gob and send to redis
-				var buf bytes.Buffer
-				enc := gob.NewEncoder(&buf)
-				err = enc.Encode(images)
-				if err != nil {
-					fmt.Println(err)
-					progress <- 1
-					return
-				}
-
-				println("Sending", len(images), "images to redis")
-				_, err = redisClient.RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
-				if err != nil {
-					fmt.Println("Failed to push data to redis:", err)
-					progress <- 1
-					return
-				}
-
-				progress <- 1
-			}(tag)
-		}
-
-		// wait for all goroutines to finish
-		for i := 0; i < len(tags); i++ {
-			<-progress
-			_ = pbar.Add(1)
-		}
-
+		ScrapeMode(redisClient)
 	} else if mode == "process" {
-		log.Info("Process mode launching, ingesting data from " + redisHostname)
-
-		// read data from redis
-		// decode gob
-		// process images, check for duplicates
-		// send to sqlite & meili
-
-		task, err := meiliClient.CreateIndex(&meilisearch.IndexConfig{
-			Uid:        "images",
-			PrimaryKey: "ID",
-		})
-		if err != nil {
-			log.Fatal("Failed to create MeiliSearch index:", err)
-		}
-		if !waitForMeilisearchTask(task, meiliClient) {
-			log.Fatal("Failed to create MeiliSearch index")
-		}
-
-		imageCollection := meiliClient.Index("images")
-		task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring"})
-		if err != nil {
-			log.Fatal("Failed to update filterable attributes:", err)
-		}
-		if !waitForMeilisearchTask(task, meiliClient) {
-			os.Exit(1)
-			return
-		}
-
-		for {
-			// read from redis
-			log.Info("Sending BLPOP to redis at key paktum:metadata_process")
-			result, err := redisClient.BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
-			log.Info("Received BLPOP response from redis")
-			if err != nil {
-				if err != redis.Nil {
-					log.Error("Error reading from redis:", err.Error())
-				}
-				continue
-			}
-
-			log.Debug("Got", len(result), "items from redis")
-
-			var images []ImageScraper.Image
-			dec := gob.NewDecoder(bytes.NewBuffer([]byte(result[1])))
-			err = dec.Decode(&images)
-			if err != nil {
-				log.Error("Failed to decode image gob:", err.Error())
-				continue
-			}
-			println("Decoded", len(images), "images")
-
-			var wg sync.WaitGroup
-			pbar := progressbar.Default(int64(len(images)), "Downloading...")
-
-			type ProcessedImages struct {
-				ImageIDs map[string]string
-				mutex    sync.Mutex
-			}
-			processedImages := ProcessedImages{
-				ImageIDs: make(map[string]string),
-				mutex:    sync.Mutex{},
-			}
-
-			for _, image := range images {
-				wg.Add(1)
-				go func(image ImageScraper.Image, wg *sync.WaitGroup, imageCollection *meilisearch.Index, processedImages *ProcessedImages, pbar *progressbar.ProgressBar) {
-					// check if image already exists
-					// if it does, skip
-					// if it doesn't, download and add to meili
-					defer wg.Done()
-					defer func(pbar *progressbar.ProgressBar, num int) {
-						_ = pbar.Add(num)
-					}(pbar, 1)
-
-					md5 := strings.TrimSuffix(image.Filename, filepath.Ext(image.Filename))
-
-					processedImages.mutex.Lock()
-					if _, ok := processedImages.ImageIDs[md5]; ok {
-						processedImages.mutex.Unlock()
-						log.Info("Found MD5 already being processed, duplicate image in queue, skipping...")
-						return
-					}
-					if imageExists(imageCollection, md5) {
-						processedImages.mutex.Unlock()
-						log.Info("Image", md5, "already exists, skipping...")
-						return
-					}
-					processedImages.ImageIDs[md5] = image.Filename
-					processedImages.mutex.Unlock()
-
-					err := downloadImage(image.FileURL, imageDir, image.Filename)
-					if err != nil {
-						log.Error("Failed to download image", image.Filename)
-						return
-					}
-
-					type ImageEntry struct {
-						ID        string   `json:"ID"`
-						URL       string   `json:"URL"`
-						Tags      []string `json:"Tags"`
-						Tagstring string   `json:"Tagstring"`
-					}
-
-					// add to meili
-					_, err = imageCollection.AddDocuments([]ImageEntry{{
-						ID:        md5,
-						URL:       image.FileURL,
-						Tags:      image.Tags,
-						Tagstring: strings.Join(image.Tags, " "),
-					}})
-				}(image, &wg, imageCollection, &processedImages, pbar)
-			}
-
-			wg.Wait()
-			_ = pbar.Finish()
-		}
+		ProcessMode(redisClient, meiliClient, imageDir)
+	} else if mode == "cleanup" {
+		CleanupMode(meiliClient)
 	}
 }
 
@@ -267,37 +98,47 @@ func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
 	return false
 }
 
-func downloadImage(url string, imageDir string, filename string) error {
+// / download image and returns the pHash as uint64
+func downloadImage(url string, imageDir string, filename string) (error, uint64) {
 	temporaryImageFile, err := os.CreateTemp(imageDir, "temp-paktum-")
 	if err != nil {
 		log.Error("Failed to create file:", err.Error())
-		return err
+		return err, 0
 	}
 
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Error("Failed to download image:", err.Error())
-		return err
+		return err, 0
 	}
 
-	_, err = io.Copy(temporaryImageFile, resp.Body)
+	buf := bytes.Buffer{}
+	tee := io.TeeReader(resp.Body, &buf)
+
+	_, err = io.Copy(temporaryImageFile, tee)
 	if err != nil {
 		log.Error("Failed to write data into image:", err.Error())
-		return err
+		return err, 0
 	}
 	err = temporaryImageFile.Close()
 	if err != nil {
-		return err
+		return err, 0
 	}
 
 	// rename temp image file to proper name
 	err = os.Rename(temporaryImageFile.Name(), imageDir+"/"+filename)
 	if err != nil {
 		log.Error("Failed to move image:", err.Error())
-		return err
+		return err, 0
 	}
 
-	return nil
+	// calculate pHash
+	decodedImage := DecodeImage(io.NopCloser(&buf))
+	if decodedImage == nil {
+		return nil, 0
+	}
+
+	return nil, GeneratePHash(decodedImage)
 }
 
 func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Client) bool {
@@ -311,7 +152,7 @@ func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Clie
 			if task.Error.Code == "index_already_exists" {
 				return true
 			}
-			println("MeiliSearch task failed:", task.Error.Message, "-", task.Error.Code)
+			log.Error("MeiliSearch task failed:", task.Error.Message, "-", task.Error.Code)
 			return false
 		}
 		if task.Status == "succeeded" {
@@ -319,17 +160,4 @@ func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Clie
 		}
 		time.Sleep(time.Millisecond * 500)
 	}
-}
-
-func readStdinTagsIntoArray() [][]string {
-	reader := bufio.NewReader(os.Stdin)
-	var tags [][]string
-	for {
-		text, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		tags = append(tags, strings.Split(strings.TrimSpace(text), " "))
-	}
-	return tags
 }
