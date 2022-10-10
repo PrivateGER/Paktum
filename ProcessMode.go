@@ -8,7 +8,6 @@ import (
 	"encoding/gob"
 	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
-	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
@@ -71,7 +70,6 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 		log.Debug("Decoded", len(images), "images")
 
 		var wg sync.WaitGroup
-		pbar := progressbar.Default(int64(len(images)), "Downloading...")
 
 		type ProcessedImages struct {
 			ImageIDs map[string]string
@@ -92,14 +90,11 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 
 		for _, image := range images {
 			wg.Add(1)
-			go func(image ImageScraper.Image, wg *sync.WaitGroup, imageCollection *meilisearch.Index, processedImages *ProcessedImages, pbar *progressbar.ProgressBar, wrappedMeiliDocs *WrappedMeiliDocs) {
+			go func(image ImageScraper.Image, wg *sync.WaitGroup, imageCollection *meilisearch.Index, processedImages *ProcessedImages, wrappedMeiliDocs *WrappedMeiliDocs) {
 				// check if image already exists
 				// if it does, skip
 				// if it doesn't, download and add to meili
 				defer wg.Done()
-				defer func(pbar *progressbar.ProgressBar, num int) {
-					_ = pbar.Add(num)
-				}(pbar, 1)
 
 				md5 := strings.TrimSuffix(image.Filename, filepath.Ext(image.Filename))
 
@@ -159,11 +154,10 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 				})
 				wrappedMeiliDocs.Unlock()
 
-			}(image, &wg, imageCollection, &processedImages, pbar, &wrappedMeiliDocs)
+			}(image, &wg, imageCollection, &processedImages, &wrappedMeiliDocs)
 		}
 
 		wg.Wait()
-		_ = pbar.Finish()
 		log.Info("Finished processing image batch.")
 
 		if len(wrappedMeiliDocs.Docs) > 0 {

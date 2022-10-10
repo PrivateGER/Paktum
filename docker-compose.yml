@@ -59,6 +59,7 @@ services:
     command:
       - "--mode=cleanup"
       - "--meilihost=http://meilisearch:7700"
+      - "--redis=redis:6379"
       - "--meilikey=meiliKey"
     profiles:
       - donotstart
