@@ -5,12 +5,28 @@ services:
     ports:
       - 7700:7700
     volumes:
-      - meilisearch-data:/data.ms
+      - meilisearch-data:/meili_data
     environment:
       MEILI_MASTER_KEY: 'meiliKey'
   redis:
     image: redis:6.2.6
     restart: unless-stopped
+  paktum_server:
+    image: privateger/paktum:master
+    restart: unless-stopped
+    volumes:
+      - "images:/images/"
+    depends_on:
+      - redis
+      - meilisearch
+    ports:
+      - 8080:8080
+    command:
+      - "--mode=server"
+      - "--redis=redis:6379"
+      - "--meilihost=http://meilisearch:7700"
+      - "--meilikey=meiliKey"
+      - "--imageDir=/images/"
   image_processor:
     image: privateger/paktum:master
     restart: unless-stopped

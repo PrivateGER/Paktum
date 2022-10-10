@@ -137,7 +137,7 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 					return
 				}
 
-				err, phash := downloadImage(image.FileURL, imageDir, md5)
+				err, phash, size, width, height := downloadImage(image.FileURL, imageDir, md5+filepath.Ext(image.Filename))
 				if err != nil {
 					log.Error("Failed to download image", image.Filename)
 					return
@@ -152,6 +152,10 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 					Rating:    image.Rating,
 					Added:     strconv.FormatUint(uint64(time.Now().Unix()), 10),
 					PHash:     phash,
+					Size:      size,
+					Width:     width,
+					Height:    height,
+					Filename:  md5 + filepath.Ext(image.Filename),
 				})
 				wrappedMeiliDocs.Unlock()
 

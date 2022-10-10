@@ -2,13 +2,17 @@ package main
 
 import (
 	"Paktum/Database"
+	"bytes"
+	"context"
+	"encoding/gob"
 	"github.com/corona10/goimagehash"
+	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
 
-func CleanupMode(client *meilisearch.Client) {
+func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 	var docs meilisearch.DocumentsResult
 	err := client.Index("images").GetDocuments(&meilisearch.DocumentsQuery{
 		Fields: []string{"ID", "PHash"},
@@ -96,6 +100,17 @@ func CleanupMode(client *meilisearch.Client) {
 	}
 
 	log.Info("Finished in ", time.Since(startTime))
+
+	// encode duplicateGroups with gob and store it in redis
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err = enc.Encode(duplicateGroups)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	redis.Set(context.Background(), "paktum:image_alts", buf, 0)
 }
 
 func PHashExistsInGroup(hash uint64, group []Database.PHashEntry) bool {

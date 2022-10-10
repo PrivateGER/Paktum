@@ -32,6 +32,9 @@ func main() {
 	var mode string
 	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
+	var serverBaseURL string
+	flag.StringVar(&serverBaseURL, "base-url", "http://localhost:8080", "The base URL of the server. No trailing slash.")
+
 	// redis is shared by server and scrape mode and used as a transfer layer
 	var redisHostname string
 	flag.StringVar(&redisHostname, "redis", "localhost:6379", "The redis server to connect to")
@@ -76,7 +79,9 @@ func main() {
 	} else if mode == "process" {
 		ProcessMode(redisClient, meiliClient, imageDir)
 	} else if mode == "cleanup" {
-		CleanupMode(meiliClient)
+		CleanupMode(meiliClient, redisClient)
+	} else if mode == "server" {
+		ServerMode(meiliClient, redisClient, imageDir, serverBaseURL)
 	}
 }
 
@@ -98,47 +103,52 @@ func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
 	return false
 }
 
-// / download image and returns the pHash as uint64
-func downloadImage(url string, imageDir string, filename string) (error, uint64) {
+// download image
+// returns the pHash as uint64
+// and the size in bytes as int
+// and the image dimensions, width and height as int
+func downloadImage(url string, imageDir string, filename string) (error, uint64, int, int, int) {
 	temporaryImageFile, err := os.CreateTemp(imageDir, "temp-paktum-")
 	if err != nil {
 		log.Error("Failed to create file:", err.Error())
-		return err, 0
+		return err, 0, 0, 0, 0
 	}
 
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Error("Failed to download image:", err.Error())
-		return err, 0
+		return err, 0, 0, 0, 0
 	}
 
 	buf := bytes.Buffer{}
 	tee := io.TeeReader(resp.Body, &buf)
 
+	size := int(resp.ContentLength)
+
 	_, err = io.Copy(temporaryImageFile, tee)
 	if err != nil {
 		log.Error("Failed to write data into image:", err.Error())
-		return err, 0
+		return err, 0, 0, 0, 0
 	}
 	err = temporaryImageFile.Close()
 	if err != nil {
-		return err, 0
+		return err, 0, 0, 0, 0
 	}
 
 	// rename temp image file to proper name
 	err = os.Rename(temporaryImageFile.Name(), imageDir+"/"+filename)
 	if err != nil {
 		log.Error("Failed to move image:", err.Error())
-		return err, 0
+		return err, 0, 0, 0, 0
 	}
 
 	// calculate pHash
 	decodedImage := DecodeImage(io.NopCloser(&buf))
 	if decodedImage == nil {
-		return nil, 0
+		return nil, 0, size, 0, 0
 	}
 
-	return nil, GeneratePHash(decodedImage)
+	return nil, GeneratePHash(decodedImage), size, decodedImage.Bounds().Dx(), decodedImage.Bounds().Dy()
 }
 
 func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Client) bool {
