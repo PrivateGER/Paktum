@@ -22,7 +22,7 @@ func BenchmarkPHash(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		res := GeneratePHash(DecodeImage(reader))
-		if res == "" {
+		if res == 0 {
 			b.Error("Failed to generate pHash")
 		}
 		_, _ = reader.Seek(0, 0)

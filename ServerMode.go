@@ -2,6 +2,8 @@ package main
 
 import (
 	"Paktum/Database"
+	"bytes"
+	"encoding/gob"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
@@ -94,8 +96,10 @@ func ServerMode(meili *meilisearch.Client, redis *redis.Client, imageDir string,
 				Height:    int(value["Height"].(float64)),
 				Filename:  value["Filename"].(string),
 			})
-
 		}
+		rand.Shuffle(len(results), func(i, j int) {
+			results[i], results[j] = results[j], results[i]
+		})
 
 		c.JSON(200, gin.H{
 			"results":    results,
@@ -127,6 +131,71 @@ func ServerMode(meili *meilisearch.Client, redis *redis.Client, imageDir string,
 		c.JSON(200, gin.H{
 			"image": image,
 			"error": "",
+		})
+	})
+
+	r.GET("/api/image/:id/related", func(c *gin.Context) {
+		id := c.Param("id")
+		if id == "" {
+			c.JSON(400, gin.H{
+				"error": "No ID provided",
+			})
+			return
+		}
+
+		var image Database.ImageEntry
+		err := imageIndex.GetDocument(id, &meilisearch.DocumentQuery{
+			Fields: nil,
+		}, &image)
+		if err != nil {
+			c.JSON(404, gin.H{
+				"error": "image not found",
+			})
+			return
+		}
+
+		groupGob, err := redis.Get(c, "paktum:image_alts").Result()
+		if err != nil {
+			c.JSON(500, gin.H{
+				"error": "Failed to get image alts from redis",
+			})
+			return
+		}
+
+		var groupMap [][]Database.PHashEntry
+		dec := gob.NewDecoder(bytes.NewBuffer([]byte(groupGob)))
+		err = dec.Decode(&groupMap)
+		if err != nil {
+			log.Error("Failed to decode image gob:", err.Error())
+			c.JSON(500, gin.H{
+				"error": "Failed to decode variants gob",
+			})
+		}
+
+		// find the phash of the image in a group
+		for _, group := range groupMap {
+			for _, entry := range group {
+				if entry.ID == id {
+					// we found the group, generate slice with IDs, minus the given image
+					var ids []string
+					for _, entry := range group {
+						if entry.ID != id {
+							ids = append(ids, entry.ID)
+						}
+					}
+
+					c.JSON(200, gin.H{
+						"results": ids,
+						"error":   "",
+					})
+					return
+				}
+			}
+		}
+
+		c.JSON(200, gin.H{
+			"results": []string{},
+			"error":   "",
 		})
 	})
 

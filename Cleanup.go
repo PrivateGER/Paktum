@@ -110,7 +110,12 @@ func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 		return
 	}
 
-	redis.Set(context.Background(), "paktum:image_alts", buf, 0)
+	err = redis.Set(context.Background(), "paktum:image_alts", buf.Bytes(), 0).Err()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info("Stored alt groups in redis")
 }
 
 func PHashExistsInGroup(hash uint64, group []Database.PHashEntry) bool {

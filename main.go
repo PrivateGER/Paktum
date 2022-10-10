@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -115,35 +117,76 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 	}
 
 	resp, err := http.Get(url)
+	defer resp.Body.Close()
 	if err != nil {
 		log.Error("Failed to download image:", err.Error())
 		return err, 0, 0, 0, 0
 	}
+	log.Trace("CONTENT-LENGTH:", resp.ContentLength)
+	if resp.ContentLength < 1 {
+		log.Error("EMPTY RESPONSE, url: ", url)
+		return err, 0, 0, 0, 0
+	}
 
-	buf := bytes.Buffer{}
-	tee := io.TeeReader(resp.Body, &buf)
+	if resp.StatusCode != http.StatusOK {
+		log.Error("Failed to download image, response code: ", resp.Status, " on url: ", url)
+		return err, 0, 0, 0, 0
+	}
+
+	var buffer bytes.Buffer
+	responseBytes, _ := io.ReadAll(resp.Body)
+	written, err := buffer.Write(responseBytes)
+	if err != nil {
+		log.Error("Failed to copy image to buffer:", err.Error())
+		return err, 0, 0, 0, 0
+	}
+	reader := bytes.NewReader(buffer.Bytes())
+	log.Trace("Written bytes to buffer:", written)
 
 	size := int(resp.ContentLength)
 
-	_, err = io.Copy(temporaryImageFile, tee)
+	imgByteCount, err := io.Copy(temporaryImageFile, reader)
+	reader.Seek(0, 0)
 	if err != nil {
 		log.Error("Failed to write data into image:", err.Error())
 		return err, 0, 0, 0, 0
 	}
+	log.Trace("Downloaded image, size: ", imgByteCount, " bytes")
+
 	err = temporaryImageFile.Close()
 	if err != nil {
 		return err, 0, 0, 0, 0
 	}
 
 	// rename temp image file to proper name
-	err = os.Rename(temporaryImageFile.Name(), imageDir+"/"+filename)
+	err = os.Rename(temporaryImageFile.Name(), imageDir+filename)
 	if err != nil {
 		log.Error("Failed to move image:", err.Error())
 		return err, 0, 0, 0, 0
 	}
 
+	if strings.HasSuffix(filename, ".webm") || strings.HasSuffix(filename, ".mp4") {
+		// video files have their frame extracted by ffmpeg
+		// and the frame is used as the image
+		log.Trace("Launching ffmpeg subprocess to extract frame from video")
+		cmd := exec.Command("/usr/bin/ffmpeg", "-i", imageDir+filename, "-vframes", "1", "-s", fmt.Sprintf("%dx%d", 1920, 1080), "-f", "singlejpeg", "-")
+
+		var videoFrame bytes.Buffer
+		cmd.Stdout = &videoFrame // overwrite the main buffer with video frame
+		var stderrBuffer bytes.Buffer
+		cmd.Stderr = &stderrBuffer
+		err = cmd.Run()
+
+		if err != nil {
+			log.Error("ffmpeg error: ", err, stderrBuffer.String())
+		}
+
+		reader = bytes.NewReader(videoFrame.Bytes())
+		reader.Seek(0, 0)
+	}
+
 	// calculate pHash
-	decodedImage := DecodeImage(io.NopCloser(&buf))
+	decodedImage := DecodeImage(io.NopCloser(reader))
 	if decodedImage == nil {
 		return nil, 0, size, 0, 0
 	}

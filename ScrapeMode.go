@@ -35,22 +35,23 @@ func ScrapeMode(redisClient *redis.Client) {
 				return
 			}
 
-			//encode image array into gob and send to redis
-			var buf bytes.Buffer
-			enc := gob.NewEncoder(&buf)
-			err = enc.Encode(images)
-			if err != nil {
-				log.Error(err)
-				progress <- 1
-				return
-			}
+			for _, imageBatch := range images {
+				//encode image array into gob and send to redis
+				var buf bytes.Buffer
+				enc := gob.NewEncoder(&buf)
+				err = enc.Encode(imageBatch)
+				if err != nil {
+					log.Error(err)
+					progress <- 1
+					return
+				}
 
-			log.Info("Sending ", len(images), " images to redis")
-			_, err = redisClient.RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
-			if err != nil {
-				log.Error("Failed to push data to redis:", err)
-				progress <- 1
-				return
+				log.Info("Sending ", len(imageBatch), " images to redis")
+				_, err = redisClient.RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
+				if err != nil {
+					log.Error("Failed to push data to redis:", err)
+					continue
+				}
 			}
 
 			progress <- 1
