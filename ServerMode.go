@@ -2,6 +2,7 @@ package main
 
 import (
 	"Paktum/Database"
+	"Paktum/ImageScraper"
 	"bytes"
 	"encoding/gob"
 	"github.com/gin-gonic/gin"
@@ -80,6 +81,10 @@ func ServerMode(meili *meilisearch.Client, redis *redis.Client, imageDir string,
 			value := hit.(map[string]interface{})
 			var tags []string
 			for _, tag := range value["Tags"].([]interface{}) {
+				// check if tag is a banned tag, if so dont include image
+				if ImageScraper.TagIsBanned(tag.(string)) {
+					continue
+				}
 				tags = append(tags, tag.(string))
 			}
 
