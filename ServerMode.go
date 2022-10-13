@@ -81,7 +81,7 @@ func ServerMode(meili *meilisearch.Client, redis *redis.Client, imageDir string,
 			value := hit.(map[string]interface{})
 			var tags []string
 			for _, tag := range value["Tags"].([]interface{}) {
-				// check if tag is a banned tag, if so dont include image
+				// check if tag is a banned tag, if so don't include image
 				if ImageScraper.TagIsBanned(tag.(string)) {
 					continue
 				}
