@@ -11,7 +11,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
+	"runtime/pprof"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -57,7 +60,34 @@ func main() {
 	var port int
 	flag.IntVar(&port, "port", 9000, "The port to run the server on")
 
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			log.Error("Failed to start CPU profile:", err)
+		}
+
+		// Hook the SIGINT (CTRL+C) event to write profile on exit
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM) // subscribe to system signals
+		onKill := func(c chan os.Signal) {
+			select {
+			case <-c:
+				defer os.Exit(0)
+				defer f.Close()
+				defer pprof.StopCPUProfile()
+			}
+		}
+
+		go onKill(c)
+	}
 
 	if mode != "scrape" && mode != "server" && mode != "process" && mode != "cleanup" {
 		log.Error("Please choose either scraping or server mode")
