@@ -1,0 +1,46 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+enum Rating {
+  explicit
+  questionable
+  safe
+  general
+}
+
+type Image {
+  ID: String!
+  url: String!
+  tags: [String!]!
+  tagstring: String!
+  rating: Rating!
+  added: String!
+  phash: String!
+  size: Int!
+  width: Int!
+  height: Int!
+  filename: String!
+  related: [NestedImage!]!
+}
+
+type NestedImage {
+  ID: String!
+  url: String!
+  tags: [String!]!
+  tagstring: String!
+  rating: Rating!
+  added: String!
+  phash: String!
+  size: Int!
+  width: Int!
+  height: Int!
+  filename: String!
+}
+
+type Query {
+  image(ID: String!): Image
+  randomImage: Image!
+  searchImages(query: String!): [Image!]!
+}
+

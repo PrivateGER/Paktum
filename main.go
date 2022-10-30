@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Paktum/Database"
 	"bytes"
 	"flag"
 	"fmt"
@@ -32,6 +33,9 @@ func init() {
 	// set global log level
 	log.SetLevel(ll)
 }
+
+var meiliClient *meilisearch.Client
+var redisClient *redis.Client
 
 func main() {
 	var mode string
@@ -96,24 +100,18 @@ func main() {
 		return
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     redisHostname,
-		Password: redisPass, // no password set
-		DB:       0,         // use default DB
-	})
-	meiliClient := meilisearch.NewClient(meilisearch.ClientConfig{
-		Host:   meiliHostname,
-		APIKey: meiliKey,
-	})
+	Database.ConnectRedis(redisHostname, redisPass, 0)
+	Database.ConnectMeilisearch(meiliHostname, meiliKey)
+	Database.SetBaseURL(serverBaseURL)
 
 	if mode == "scrape" {
-		ScrapeMode(redisClient)
+		ScrapeMode()
 	} else if mode == "process" {
-		ProcessMode(redisClient, meiliClient, imageDir)
+		ProcessMode(imageDir)
 	} else if mode == "cleanup" {
-		CleanupMode(meiliClient, redisClient)
+		CleanupMode()
 	} else if mode == "server" {
-		ServerMode(meiliClient, redisClient, imageDir, serverBaseURL)
+		ServerMode(imageDir)
 	}
 }
 
@@ -243,4 +241,12 @@ func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Clie
 		}
 		time.Sleep(time.Millisecond * 500)
 	}
+}
+
+func GetMeilisearch() *meilisearch.Client {
+	return meiliClient
+}
+
+func GetRedis() *redis.Client {
+	return redisClient
 }
