@@ -6,20 +6,19 @@ import (
 	"context"
 	"encoding/gob"
 	"github.com/corona10/goimagehash"
-	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
 
-func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
+func CleanupMode() {
 	var allDocuments []map[string]interface{}
 
 	// get all documents from meilisearch
 
 	for offset := 0; ; offset += 1000 {
 		var docs meilisearch.DocumentsResult
-		err := client.Index("images").GetDocuments(&meilisearch.DocumentsQuery{
+		err := GetMeilisearch().Index("images").GetDocuments(&meilisearch.DocumentsQuery{
 			Fields: []string{"ID", "PHash"},
 			Limit:  1000,
 			Offset: int64(offset),
@@ -124,7 +123,7 @@ func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 		return
 	}
 
-	err = redis.Set(context.Background(), "paktum:image_alts", buf.Bytes(), 0).Err()
+	err = GetRedis().Set(context.Background(), "paktum:image_alts", buf.Bytes(), 0).Err()
 	if err != nil {
 		log.Error(err)
 		return

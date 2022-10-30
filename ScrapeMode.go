@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
@@ -14,7 +13,7 @@ import (
 	"strings"
 )
 
-func ScrapeMode(redisClient *redis.Client) {
+func ScrapeMode() {
 	log.Info("Scraping mode launching")
 
 	// read from stdin until EOF
@@ -47,7 +46,7 @@ func ScrapeMode(redisClient *redis.Client) {
 				}
 
 				log.Info("Sending ", len(imageBatch), " images to redis")
-				_, err = redisClient.RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
+				_, err = GetRedis().RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
 				if err != nil {
 					log.Error("Failed to push data to redis:", err)
 					continue
