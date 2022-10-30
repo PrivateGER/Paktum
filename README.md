@@ -44,7 +44,16 @@ This mode is responsible for serving the REST API and serving images.
 
 It uses Meilisearch as search backend and reads the PHash groups from the Redis server.
 
+
+## GraphQL
+There's a full-featured GraphQL API included. This is the preferred API.
+
+You can check the schema in [this file](graph/schema.graphqls) or simply check the landing page of Paktum for a full-featured GraphQL code editor.
+
+
 ## REST API
+USE THE GRAPHQL API INSTEAD. This will *work*, but you shouldn't be using it.
+GraphQL is a lot more handy.
 
 ### /api/search?query={tags}&limit={limit}
 Request Method: GET
