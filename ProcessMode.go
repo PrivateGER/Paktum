@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, imageDir string) {
+func ProcessMode(imageDir string) {
 	log.Info("Process mode launching, ingesting data from redis...")
 
 	// read data from redis
@@ -25,23 +25,23 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 	// process images, check for duplicates
 	// send to meili
 
-	task, err := meiliClient.CreateIndex(&meilisearch.IndexConfig{
+	task, err := GetMeilisearch().CreateIndex(&meilisearch.IndexConfig{
 		Uid:        "images",
 		PrimaryKey: "ID",
 	})
 	if err != nil {
 		log.Fatal("Failed to create MeiliSearch index:", err)
 	}
-	if !waitForMeilisearchTask(task, meiliClient) {
+	if !waitForMeilisearchTask(task, GetMeilisearch()) {
 		log.Fatal("Failed to create MeiliSearch index")
 	}
 
-	imageCollection := meiliClient.Index("images")
+	imageCollection := GetMeilisearch().Index("images")
 	task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring"})
 	if err != nil {
 		log.Fatal("Failed to update filterable attributes:", err)
 	}
-	if !waitForMeilisearchTask(task, meiliClient) {
+	if !waitForMeilisearchTask(task, GetMeilisearch()) {
 		os.Exit(1)
 		return
 	}
@@ -49,7 +49,7 @@ func ProcessMode(redisClient *redis.Client, meiliClient *meilisearch.Client, ima
 	for {
 		// read from redis
 		log.Info("Sending BLPOP to redis at key paktum:metadata_process")
-		result, err := redisClient.BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
+		result, err := GetRedis().BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
 		log.Info("Received BLPOP response from redis")
 		if err != nil {
 			if err != redis.Nil {
