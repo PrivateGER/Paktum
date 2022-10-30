@@ -13,23 +13,37 @@ import (
 )
 
 func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
-	var docs meilisearch.DocumentsResult
-	err := client.Index("images").GetDocuments(&meilisearch.DocumentsQuery{
-		Fields: []string{"ID", "PHash"},
-		Limit:  1000,
-	}, &docs)
-	if err != nil {
-		log.Fatal("Failed to get documents from MeiliSearch:", err)
+	var allDocuments []map[string]interface{}
+
+	// get all documents from meilisearch
+
+	for offset := 0; ; offset += 1000 {
+		var docs meilisearch.DocumentsResult
+		err := client.Index("images").GetDocuments(&meilisearch.DocumentsQuery{
+			Fields: []string{"ID", "PHash"},
+			Limit:  1000,
+			Offset: int64(offset),
+		}, &docs)
+		log.Info("Got ", len(docs.Results), " documents from meilisearch, offset ", offset)
+
+		if err != nil {
+			log.Fatal("Failed to get documents from MeiliSearch:", err)
+		}
+		if len(docs.Results) == 0 {
+			break
+		}
+
+		allDocuments = append(allDocuments, docs.Results...)
 	}
 
-	log.Info("Got ", len(docs.Results), " documents from MeiliSearch")
+	log.Info("Got ", len(allDocuments), " documents from MeiliSearch")
 
 	startTime := time.Now()
 
 	duplicates := make(map[string][]Database.PHashEntry)
 
 	// find duplicates using pHash
-	for i, doc := range docs.Results {
+	for i, doc := range allDocuments {
 		needleHash, _ := doc["PHash"].(float64)
 		needleID, _ := doc["ID"].(string)
 
@@ -41,9 +55,9 @@ func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 
 		hash := goimagehash.NewImageHash(uint64(needleHash), goimagehash.PHash)
 
-		for j := i + 1; j < len(docs.Results); j++ {
-			otherHash, _ := docs.Results[j]["PHash"].(float64)
-			otherID, _ := docs.Results[j]["ID"].(string)
+		for j := i + 1; j < len(allDocuments); j++ {
+			otherHash, _ := allDocuments[j]["PHash"].(float64)
+			otherID, _ := allDocuments[j]["ID"].(string)
 
 			if uint64(otherHash) == 0 {
 				continue
@@ -78,13 +92,13 @@ func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 
 		// find the index of the group where the original key is a member
 		// if it is not a member of any group, it returns -1
-		groupIndex := FindInside([]Database.PHashEntry{FindPHashFromID(originalKey, docs)}, duplicateGroups)
+		groupIndex := FindInside([]Database.PHashEntry{FindPHashFromID(originalKey, allDocuments)}, duplicateGroups)
 		if groupIndex == -1 {
 			// create a new group
-			duplicateGroups = append(duplicateGroups, append(original, FindPHashFromID(originalKey, docs)))
+			duplicateGroups = append(duplicateGroups, append(original, FindPHashFromID(originalKey, allDocuments)))
 		} else {
 			// add the original key to the group
-			duplicateGroups[groupIndex] = append(duplicateGroups[groupIndex], FindPHashFromID(originalKey, docs))
+			duplicateGroups[groupIndex] = append(duplicateGroups[groupIndex], FindPHashFromID(originalKey, allDocuments))
 
 			// add all sub-keys to the groups
 			duplicateGroups[groupIndex] = MergeGroups(duplicateGroups[groupIndex], original)
@@ -104,7 +118,7 @@ func CleanupMode(client *meilisearch.Client, redis *redis.Client) {
 	// encode duplicateGroups with gob and store it in redis
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err = enc.Encode(duplicateGroups)
+	err := enc.Encode(duplicateGroups)
 	if err != nil {
 		log.Error(err)
 		return
@@ -154,8 +168,8 @@ func MergeGroups(originalGroup []Database.PHashEntry, newGroup []Database.PHashE
 	return originalGroup
 }
 
-func FindPHashFromID(id string, docs meilisearch.DocumentsResult) Database.PHashEntry {
-	for _, doc := range docs.Results {
+func FindPHashFromID(id string, docs []map[string]interface{}) Database.PHashEntry {
+	for _, doc := range docs {
 		if doc["ID"] == id {
 			return Database.PHashEntry{
 				ID:       id,
