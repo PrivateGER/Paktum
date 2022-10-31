@@ -1,5 +1,18 @@
 FROM golang:1.19
+LABEL maintainer="privateger@privateger.me"
+
 WORKDIR /go/src/Paktum
+
+# Install deps
+COPY go.mod go.sum ./
+RUN go mod download -x
+
+# Generate GraphQL schema
+COPY graph ./graph
+COPY tools.go gqlgen.yml ./
+RUN go run github.com/99designs/gqlgen generate
+
+# Build code
 COPY . ./
 RUN go build -o Paktum Paktum
 
