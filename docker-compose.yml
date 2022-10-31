@@ -15,7 +15,7 @@ services:
     image: privateger/paktum:master
     restart: unless-stopped
     volumes:
-      - "images:/images/"
+      - "images:/home/paktum/images/"
     depends_on:
       - redis
       - meilisearch
@@ -26,12 +26,12 @@ services:
       - "--redis=redis:6379"
       - "--meilihost=http://meilisearch:7700"
       - "--meilikey=meiliKey"
-      - "--imageDir=/images/"
+      - "--imageDir=/home/paktum/images/"
   image_processor:
     image: privateger/paktum:master
     restart: unless-stopped
     volumes:
-      - "images:/images/"
+      - "images:/home/paktum/images/"
     depends_on:
       - redis
       - meilisearch
@@ -40,7 +40,7 @@ services:
       - "--redis=redis:6379"
       - "--meilihost=http://meilisearch:7700"
       - "--meilikey=meiliKey"
-      - "--imageDir=/images/"
+      - "--imageDir=/home/paktum/images/"
   image_scraper:
     image: privateger/paktum:master
     restart: "no"

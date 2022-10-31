@@ -2,6 +2,10 @@
 #
 # https://gqlgen.com/getting-started/
 
+"""
+The safety rating.
+General is SFW, Safe is SFW but may contain some adult content, and questionable up should be considered NSFW.
+"""
 enum Rating {
   explicit
   questionable
@@ -9,6 +13,9 @@ enum Rating {
   general
 }
 
+"""
+A full image with all available metadata.
+"""
 type Image {
   ID: String!
   Url: String!
@@ -16,14 +23,26 @@ type Image {
   Tagstring: String!
   Rating: Rating!
   Added: String!
+  """
+  uint64 perception hash encoded as String. They can be compared using Hamming distance.
+  """
   PHash: String!
+  """
+  Size in bytes.
+  """
   Size: Int!
   Width: Int!
   Height: Int!
   Filename: String!
+  """
+  Images that are similar to this one, based on perception-hashing. By default a distance of 10 is considered related.
+  """
   Related: [NestedImage!]!
 }
 
+"""
+An image that is nested in some way. This does not contain the Related field, but is otherwise identical to Image.
+"""
 type NestedImage {
   ID: String!
   Url: String!
@@ -39,8 +58,19 @@ type NestedImage {
 }
 
 type Query {
+  """
+  Retrieves an image by its ID.
+  """
   image(ID: String!): Image
+  """
+  Retrieve an entirely random image.
+  """
   randomImage: Image!
-  searchImages(query: String!): [Image!]!
+  """
+  Search for an image with tags like query.
+  Limit must be 0 < limit <= 100.
+  Shuffle will randomize the order of the results.
+  """
+  searchImages(query: String!, limit: Int!, shuffle: Boolean): [Image!]!
 }
 

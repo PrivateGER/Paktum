@@ -63,5 +63,5 @@ models:
       - github.com/99designs/gqlgen/graphql.Int32
   Image:
     fields:
-      related:
+      Related:
         resolver: true
