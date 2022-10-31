@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Paktum/Database"
 	"Paktum/ImageScraper"
 	"bufio"
 	"bytes"
@@ -46,7 +47,7 @@ func ScrapeMode() {
 				}
 
 				log.Info("Sending ", len(imageBatch), " images to redis")
-				_, err = GetRedis().RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
+				_, err = Database.GetRedis().RPush(context.Background(), "paktum:metadata_process", buf.Bytes()).Result()
 				if err != nil {
 					log.Error("Failed to push data to redis:", err)
 					continue

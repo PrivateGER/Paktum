@@ -258,25 +258,24 @@ func GetRandomImage() (ImageEntry, error) {
 	}
 
 	maxOffset := int(resultCountSearch.EstimatedTotalHits) - 1
-	if maxOffset < 0 {
-		maxOffset = int(resultCountSearch.EstimatedTotalHits)
-	}
 	offset := rand.Intn(maxOffset)
 
 	// Offset is now randomized between 0 and result count - limit, so we can always get unique results
 	// and return one, which is random
-	search, err := imageIndex.Search("", &meilisearch.SearchRequest{
-		Limit:  int64(1),
+	var res meilisearch.DocumentsResult
+	err = imageIndex.GetDocuments(&meilisearch.DocumentsQuery{
+		Fields: []string{"ID", "PHash", "Filename", "Tagstring", "Tags", "Rating", "Added", "Size", "Width", "Height"},
+		Limit:  1,
 		Offset: int64(offset),
-	})
+	}, &res)
 
 	if err != nil {
 		return ImageEntry{}, err
 	}
 
 	var image ImageEntry
-	for _, hit := range search.Hits {
-		value := hit.(map[string]interface{})
+	for _, hit := range res.Results {
+		value := hit
 		var tags []string
 		for _, tag := range value["Tags"].([]interface{}) {
 			// check if tag is a banned tag, if so don't include image
@@ -312,7 +311,7 @@ func DBImageToGraphImage(image ImageEntry) *model.Image {
 		Tagstring: image.Tagstring,
 		Rating:    model.Rating(image.Rating),
 		Added:     image.Added,
-		Phash:     strconv.FormatUint(image.PHash, 10),
+		PHash:     strconv.FormatUint(image.PHash, 10),
 		Size:      image.Size,
 		Width:     image.Width,
 		Height:    image.Height,

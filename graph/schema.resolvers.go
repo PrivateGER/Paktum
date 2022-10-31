@@ -25,7 +25,7 @@ func (r *queryResolver) Image(ctx context.Context, id string) (*model.Image, err
 	allFields := graphql.CollectAllFields(ctx)
 	shouldFetchRelated := false
 	for _, field := range allFields {
-		if field == "related" {
+		if field == "Related" {
 			shouldFetchRelated = true
 		}
 	}
@@ -65,7 +65,7 @@ func (r *queryResolver) RandomImage(ctx context.Context) (*model.Image, error) {
 	allFields := graphql.CollectAllFields(ctx)
 	shouldFetchRelated := false
 	for _, field := range allFields {
-		if field == "related" {
+		if field == "Related" {
 			shouldFetchRelated = true
 		}
 	}
@@ -88,15 +88,10 @@ func (r *queryResolver) RandomImage(ctx context.Context) (*model.Image, error) {
 		}
 	}
 
-	var convertedImage model.Image
-	err = copier.Copy(&convertedImage, &image)
-	if err != nil {
-		return nil, err
-	}
-
+	convertedImage := Database.DBImageToGraphImage(image)
 	convertedImage.Related = relatedImages
 
-	return &convertedImage, nil
+	return convertedImage, nil
 }
 
 // SearchImages is the resolver for the searchImages field.
@@ -110,7 +105,7 @@ func (r *queryResolver) SearchImages(ctx context.Context, query string) ([]*mode
 	allFields := graphql.CollectAllFields(ctx)
 	shouldFetchRelated := false
 	for _, field := range allFields {
-		if field == "related" {
+		if field == "Related" {
 			shouldFetchRelated = true
 		}
 	}
@@ -132,12 +127,12 @@ func (r *queryResolver) SearchImages(ctx context.Context, query string) ([]*mode
 			}
 
 			for _, relatedImage := range related {
-				var convertedImage model.NestedImage
-				err := copier.Copy(&convertedImage, &relatedImage)
+				var nestedConvertedImage model.NestedImage
+				err := copier.Copy(&nestedConvertedImage, &relatedImage)
 				if err != nil {
 					return nil, err
 				}
-				relatedImages = append(relatedImages, &convertedImage)
+				relatedImages = append(relatedImages, &nestedConvertedImage)
 			}
 		}
 		convertedImage.Related = relatedImages

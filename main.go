@@ -242,11 +242,3 @@ func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Clie
 		time.Sleep(time.Millisecond * 500)
 	}
 }
-
-func GetMeilisearch() *meilisearch.Client {
-	return meiliClient
-}
-
-func GetRedis() *redis.Client {
-	return redisClient
-}

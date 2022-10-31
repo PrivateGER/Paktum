@@ -11,31 +11,31 @@ enum Rating {
 
 type Image {
   ID: String!
-  url: String!
-  tags: [String!]!
-  tagstring: String!
-  rating: Rating!
-  added: String!
-  phash: String!
-  size: Int!
-  width: Int!
-  height: Int!
-  filename: String!
-  related: [NestedImage!]!
+  Url: String!
+  Tags: [String!]!
+  Tagstring: String!
+  Rating: Rating!
+  Added: String!
+  PHash: String!
+  Size: Int!
+  Width: Int!
+  Height: Int!
+  Filename: String!
+  Related: [NestedImage!]!
 }
 
 type NestedImage {
   ID: String!
-  url: String!
-  tags: [String!]!
-  tagstring: String!
-  rating: Rating!
-  added: String!
-  phash: String!
-  size: Int!
-  width: Int!
-  height: Int!
-  filename: String!
+  Url: String!
+  Tags: [String!]!
+  Tagstring: String!
+  Rating: Rating!
+  Added: String!
+  PHash: String!
+  Size: Int!
+  Width: Int!
+  Height: Int!
+  Filename: String!
 }
 
 type Query {

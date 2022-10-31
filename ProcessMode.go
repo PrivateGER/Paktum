@@ -25,23 +25,23 @@ func ProcessMode(imageDir string) {
 	// process images, check for duplicates
 	// send to meili
 
-	task, err := GetMeilisearch().CreateIndex(&meilisearch.IndexConfig{
+	task, err := Database.GetMeiliClient().CreateIndex(&meilisearch.IndexConfig{
 		Uid:        "images",
 		PrimaryKey: "ID",
 	})
 	if err != nil {
 		log.Fatal("Failed to create MeiliSearch index:", err)
 	}
-	if !waitForMeilisearchTask(task, GetMeilisearch()) {
+	if !waitForMeilisearchTask(task, Database.GetMeiliClient()) {
 		log.Fatal("Failed to create MeiliSearch index")
 	}
 
-	imageCollection := GetMeilisearch().Index("images")
+	imageCollection := Database.GetMeiliClient().Index("images")
 	task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring"})
 	if err != nil {
 		log.Fatal("Failed to update filterable attributes:", err)
 	}
-	if !waitForMeilisearchTask(task, GetMeilisearch()) {
+	if !waitForMeilisearchTask(task, Database.GetMeiliClient()) {
 		os.Exit(1)
 		return
 	}
@@ -49,7 +49,7 @@ func ProcessMode(imageDir string) {
 	for {
 		// read from redis
 		log.Info("Sending BLPOP to redis at key paktum:metadata_process")
-		result, err := GetRedis().BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
+		result, err := Database.GetRedis().BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
 		log.Info("Received BLPOP response from redis")
 		if err != nil {
 			if err != redis.Nil {

@@ -10,31 +10,31 @@ import (
 
 type Image struct {
 	ID        string         `json:"ID"`
-	URL       string         `json:"url"`
-	Tags      []string       `json:"tags"`
-	Tagstring string         `json:"tagstring"`
-	Rating    Rating         `json:"rating"`
-	Added     string         `json:"added"`
-	Phash     string         `json:"phash"`
-	Size      int            `json:"size"`
-	Width     int            `json:"width"`
-	Height    int            `json:"height"`
-	Filename  string         `json:"filename"`
-	Related   []*NestedImage `json:"related"`
+	URL       string         `json:"Url"`
+	Tags      []string       `json:"Tags"`
+	Tagstring string         `json:"Tagstring"`
+	Rating    Rating         `json:"Rating"`
+	Added     string         `json:"Added"`
+	PHash     string         `json:"PHash"`
+	Size      int            `json:"Size"`
+	Width     int            `json:"Width"`
+	Height    int            `json:"Height"`
+	Filename  string         `json:"Filename"`
+	Related   []*NestedImage `json:"Related"`
 }
 
 type NestedImage struct {
 	ID        string   `json:"ID"`
-	URL       string   `json:"url"`
-	Tags      []string `json:"tags"`
-	Tagstring string   `json:"tagstring"`
-	Rating    Rating   `json:"rating"`
-	Added     string   `json:"added"`
-	Phash     string   `json:"phash"`
-	Size      int      `json:"size"`
-	Width     int      `json:"width"`
-	Height    int      `json:"height"`
-	Filename  string   `json:"filename"`
+	URL       string   `json:"Url"`
+	Tags      []string `json:"Tags"`
+	Tagstring string   `json:"Tagstring"`
+	Rating    Rating   `json:"Rating"`
+	Added     string   `json:"Added"`
+	PHash     string   `json:"PHash"`
+	Size      int      `json:"Size"`
+	Width     int      `json:"Width"`
+	Height    int      `json:"Height"`
+	Filename  string   `json:"Filename"`
 }
 
 type Rating string

@@ -18,7 +18,7 @@ func CleanupMode() {
 
 	for offset := 0; ; offset += 1000 {
 		var docs meilisearch.DocumentsResult
-		err := GetMeilisearch().Index("images").GetDocuments(&meilisearch.DocumentsQuery{
+		err := Database.GetMeiliClient().Index("images").GetDocuments(&meilisearch.DocumentsQuery{
 			Fields: []string{"ID", "PHash"},
 			Limit:  1000,
 			Offset: int64(offset),
@@ -123,7 +123,7 @@ func CleanupMode() {
 		return
 	}
 
-	err = GetRedis().Set(context.Background(), "paktum:image_alts", buf.Bytes(), 0).Err()
+	err = Database.GetRedis().Set(context.Background(), "paktum:image_alts", buf.Bytes(), 0).Err()
 	if err != nil {
 		log.Error(err)
 		return

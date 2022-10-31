@@ -47,6 +47,8 @@ var BannedTags = []string{
 	"watersports",
 	"vore",
 	"anya_(spy_x_family)",
+	"aged_down",
+	"age_difference",
 }
 
 func TagIsBanned(tag string) bool {
