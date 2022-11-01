@@ -11,8 +11,8 @@ type Image struct {
 	Rating      string
 }
 
-func Scrape(tags []string, taskuid string) (error, [][]Image) {
-	err, images := Gelbooru(tags, taskuid)
+func Scrape(tags []string) (error, [][]Image) {
+	err, images := Gelbooru(tags)
 	batchSize := 100
 	var batches [][]Image
 	if err != nil {

@@ -1,7 +1,6 @@
 package ImageScraper
 
 import (
-	"Paktum/TaskManager"
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -103,8 +102,7 @@ func scrape(tags []string, page uint) (error, []Image) {
 	return nil, images
 }
 
-func Gelbooru(tags []string, taskuid string) (error, []Image) {
-	TaskManager.SetTaskStatus(taskuid, "In Progress")
+func Gelbooru(tags []string) (error, []Image) {
 	imageList := make([]Image, 0)
 
 	for i := 0; i < 5; i++ {
@@ -120,9 +118,6 @@ func Gelbooru(tags []string, taskuid string) (error, []Image) {
 			break
 		}
 	}
-
-	TaskManager.SetTaskStatus(taskuid, "Done")
-	TaskManager.SetTaskDone(taskuid)
 
 	return nil, imageList
 }

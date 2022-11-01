@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -28,7 +27,7 @@ func ScrapeMode() {
 
 	for _, tag := range tags {
 		go func(tag []string) {
-			err, images := ImageScraper.Scrape(tag, uuid.New().String())
+			err, images := ImageScraper.Scrape(tag)
 			if err != nil {
 				log.Error(err)
 				progress <- 1
