@@ -109,7 +109,7 @@ func main() {
 	} else if mode == "process" {
 		ProcessMode(imageDir)
 	} else if mode == "cleanup" {
-		CleanupMode()
+		CleanupMode(imageDir)
 	} else if mode == "server" {
 		ServerMode(imageDir)
 	}
@@ -197,7 +197,9 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 		// video files have their frame extracted by ffmpeg
 		// and the frame is used as the image
 		log.Trace("Launching ffmpeg subprocess to extract frame from video")
-		cmd := exec.Command("/usr/bin/ffmpeg", "-i", imageDir+filename, "-vframes", "1", "-s", fmt.Sprintf("%dx%d", 1920, 1080), "-f", "singlejpeg", "-")
+		log.Info("Extracting first frame from video file ", filename)
+		cmd := exec.Command("/usr/bin/ffmpeg", "-i", imageDir+filename, "-frames:v", "1", "-s", fmt.Sprintf("%dx%d", 640, 480), "-c:v", "mjpeg", "-f", "mjpeg", "-")
+		log.Info(cmd.Path, cmd.Args)
 
 		var videoFrame bytes.Buffer
 		cmd.Stdout = &videoFrame // overwrite the main buffer with video frame
@@ -222,9 +224,12 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 	return nil, GeneratePHash(decodedImage), size, decodedImage.Bounds().Dx(), decodedImage.Bounds().Dy()
 }
 
-func waitForMeilisearchTask(info *meilisearch.TaskInfo, client *meilisearch.Client) bool {
+func waitForMeilisearchTask(info *meilisearch.TaskInfo) bool {
+	client := Database.GetMeiliClient()
+
 	for {
 		task, err := client.GetTask(info.TaskUID)
+
 		if err != nil {
 			log.Fatal("Failed to get task:", err)
 			return false

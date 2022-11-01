@@ -2,20 +2,82 @@ package main
 
 import (
 	"Paktum/Database"
+	"Paktum/ImageScraper"
 	"bytes"
 	"context"
 	"encoding/gob"
 	"github.com/corona10/goimagehash"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"time"
 )
 
-func CleanupMode() {
+func RemoveImagesWithBadTags(imageDir string) {
 	var allDocuments []map[string]interface{}
 
 	// get all documents from meilisearch
+	for offset := 0; ; offset += 1000 {
+		var docs meilisearch.DocumentsResult
+		err := Database.GetMeiliClient().Index("images").GetDocuments(&meilisearch.DocumentsQuery{
+			Fields: []string{"ID", "Tags", "Filename"},
+			Limit:  1000,
+			Offset: int64(offset),
+		}, &docs)
+		log.Info("Got ", len(docs.Results), " documents from meilisearch, offset ", offset)
 
+		if err != nil {
+			log.Fatal("Failed to get documents from MeiliSearch:", err)
+			return
+		}
+		if len(docs.Results) == 0 {
+			break
+		}
+
+		allDocuments = append(allDocuments, docs.Results...)
+	}
+
+	// go over all documents and remove those with banned tags
+	var toDelete []string
+	for _, doc := range allDocuments {
+		id := doc["ID"].(string)
+
+		for _, tag := range doc["Tags"].([]interface{}) {
+			if ImageScraper.TagIsBanned(tag.(string)) {
+				log.Info("Removing image ", id, " because it has a banned tag ", tag)
+				err := os.Remove(imageDir + doc["Filename"].(string))
+				if err != nil {
+					log.Error("Failed to remove image from filesystem ", id, " ", doc["Filename"].(string), ": ", err)
+				}
+
+				toDelete = append(toDelete, id)
+			}
+		}
+	}
+
+	if len(toDelete) == 0 {
+		log.Info("No images to delete")
+		return
+	}
+
+	// delete all images that have been marked for deletion
+	taskInfo, err := Database.GetMeiliClient().Index("images").DeleteDocuments(toDelete)
+	if err != nil {
+		log.Fatal("Failed to delete documents from MeiliSearch:", err)
+		return
+	}
+
+	if waitForMeilisearchTask(taskInfo) {
+		log.Info("Successfully removed ", len(toDelete), " images with banned tags")
+	} else {
+		log.Error("Failed to remove images with banned tags")
+	}
+}
+
+func GeneratePHashes() {
+	var allDocuments []map[string]interface{}
+
+	// get all documents from meilisearch
 	for offset := 0; ; offset += 1000 {
 		var docs meilisearch.DocumentsResult
 		err := Database.GetMeiliClient().Index("images").GetDocuments(&meilisearch.DocumentsQuery{
@@ -129,6 +191,11 @@ func CleanupMode() {
 		return
 	}
 	log.Info("Stored alt groups in redis")
+}
+
+func CleanupMode(imageDir string) {
+	RemoveImagesWithBadTags(imageDir)
+	GeneratePHashes()
 }
 
 func PHashExistsInGroup(hash uint64, group []Database.PHashEntry) bool {

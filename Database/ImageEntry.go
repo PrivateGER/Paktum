@@ -69,6 +69,12 @@ func GetMeiliClient() *meilisearch.Client {
 		panic("Meili client not initialized")
 	}
 
+	if !meiliClient.IsHealthy() {
+		panic("Meili client is not healthy")
+	}
+
+	log.Debug("Meili client is healthy and initialized, returning instance")
+
 	return meiliClient
 }
 
@@ -76,6 +82,14 @@ func GetRedis() *redis.Client {
 	if redisClient == nil {
 		panic("Redis client not initialized")
 	}
+
+	// check if redis is healthy
+	_, err := redisClient.Ping(context.Background()).Result()
+	if err != nil {
+		panic("Redis client is not healthy")
+	}
+
+	log.Debug("Redis client is healthy and initialized, returning instance")
 
 	return redisClient
 }

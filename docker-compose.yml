@@ -56,6 +56,8 @@ services:
     restart: "no"
     depends_on:
       - meilisearch
+    environment:
+      - "LOG_LEVEL=DEBUG"
     command:
       - "--mode=cleanup"
       - "--meilihost=http://meilisearch:7700"

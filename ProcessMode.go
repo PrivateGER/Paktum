@@ -32,7 +32,7 @@ func ProcessMode(imageDir string) {
 	if err != nil {
 		log.Fatal("Failed to create MeiliSearch index:", err)
 	}
-	if !waitForMeilisearchTask(task, Database.GetMeiliClient()) {
+	if !waitForMeilisearchTask(task) {
 		log.Fatal("Failed to create MeiliSearch index")
 	}
 
@@ -41,7 +41,7 @@ func ProcessMode(imageDir string) {
 	if err != nil {
 		log.Fatal("Failed to update filterable attributes:", err)
 	}
-	if !waitForMeilisearchTask(task, Database.GetMeiliClient()) {
+	if !waitForMeilisearchTask(task) {
 		os.Exit(1)
 		return
 	}

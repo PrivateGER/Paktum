@@ -16,7 +16,7 @@ Paktum uses a persistent Redis and Meilisearch instance to store data and exchan
 
 ### Scrape mode
 ```bash
-echo "hug" | ./SCRAPE.sh
+printf "hug\n" | ./SCRAPE.sh
 ```
 
 This sends a query to scrape images with the type "hug"  to the scrape container.
@@ -27,7 +27,7 @@ This mode is responsible for processing images, generating perceptual hashes and
 
 It ingests data from the Redis key that is populated by a scrape container.
 
-Several instances of this can be ran at once.
+Several instances of this can be run at once.
 
 ### Cleanup mode
 This mode is responsible for removing images from the Meilisearch index that are tagged with banned tags.

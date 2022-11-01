@@ -1,5 +1,7 @@
 package ImageScraper
 
+import "strings"
+
 /***
 TAGS BELOW ARE NSFW AND MAY BE OFFENSIVE TO SOME USERS
 */
@@ -53,7 +55,7 @@ var BannedTags = []string{
 
 func TagIsBanned(tag string) bool {
 	for _, bannedTag := range BannedTags {
-		if tag == bannedTag {
+		if strings.ToLower(tag) == bannedTag {
 			return true
 		}
 	}
