@@ -168,9 +168,9 @@ func GenerateRelatedGroups() {
 
 	log.Info("Found ", len(duplicateGroups), " duplicate groups")
 	for i, group := range duplicateGroups {
-		log.Info("Group ", i, " contains ", len(group), " members")
+		log.Trace("Group ", i, " contains ", len(group), " members")
 		for _, member := range group {
-			log.Info("Member ", member)
+			log.Trace("Member ", member)
 		}
 	}
 
@@ -190,7 +190,7 @@ func GenerateRelatedGroups() {
 		log.Error(err)
 		return
 	}
-	log.Info("Stored alt groups in redis")
+	log.Info("Stored alt groups in redis successfully")
 }
 
 func CleanupMode(imageDir string) {
