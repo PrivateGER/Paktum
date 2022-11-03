@@ -74,7 +74,7 @@ func RemoveImagesWithBadTags(imageDir string) {
 	}
 }
 
-func GeneratePHashes() {
+func GenerateRelatedGroups() {
 	var allDocuments []map[string]interface{}
 
 	// get all documents from meilisearch
@@ -133,7 +133,7 @@ func GeneratePHashes() {
 			}
 
 			if distance < 10 {
-				log.Info("Found possible image duplicate with IDs ", needleID, " and ", otherID, " with distance ", distance)
+				log.Info("Found possible image variant with IDs ", needleID, " and ", otherID, " with distance ", distance)
 				duplicates[needleID] = append(duplicates[needleID], Database.PHashEntry{
 					ID:       otherID,
 					Hash:     uint64(otherHash),
@@ -195,7 +195,7 @@ func GeneratePHashes() {
 
 func CleanupMode(imageDir string) {
 	RemoveImagesWithBadTags(imageDir)
-	GeneratePHashes()
+	GenerateRelatedGroups()
 }
 
 func PHashExistsInGroup(hash uint64, group []Database.PHashEntry) bool {
