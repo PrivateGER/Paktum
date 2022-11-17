@@ -5,7 +5,11 @@ import (
 	"Paktum/graph/model"
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/gob"
+	"encoding/hex"
 	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
@@ -15,17 +19,18 @@ import (
 )
 
 type ImageEntry struct {
-	ID        string   `json:"ID"`
-	URL       string   `json:"URL"`
-	Tags      []string `json:"Tags"`
-	Tagstring string   `json:"Tagstring"`
-	Rating    string   `json:"Rating"`
-	Added     string   `json:"Added"`
-	PHash     uint64   `json:"PHash"`
-	Size      int      `json:"Size"`
-	Width     int      `json:"Width"`
-	Height    int      `json:"Height"`
-	Filename  string   `json:"Filename"`
+	ID           string   `json:"ID"`
+	URL          string   `json:"URL"`
+	ThumbnailURL string   `json:"ThumbnailURL"`
+	Tags         []string `json:"Tags"`
+	Tagstring    string   `json:"Tagstring"`
+	Rating       string   `json:"Rating"`
+	Added        string   `json:"Added"`
+	PHash        uint64   `json:"PHash"`
+	Size         int      `json:"Size"`
+	Width        int      `json:"Width"`
+	Height       int      `json:"Height"`
+	Filename     string   `json:"Filename"`
 }
 
 var meiliClient *meilisearch.Client
@@ -58,19 +63,60 @@ func SetBaseURL(url string) {
 
 func GetBaseURL() string {
 	if baseURL == "" {
-		panic("Base URL not set")
+		log.Fatal("Base URL not set")
 	}
 
 	return baseURL
 }
 
+var imgproxyBaseUrl string
+var imgproxyKey []byte
+var imgproxySalt []byte
+
+func SetImgproxyBaseUrl(url string) {
+	imgproxyBaseUrl = url
+}
+
+func GetImgproxyBaseUrl() string {
+	if imgproxyBaseUrl == "" {
+		log.Fatal("Imgproxy base URL not set")
+	}
+
+	return imgproxyBaseUrl
+}
+
+func GetImgproxyKey() []byte {
+	if len(imgproxyKey) == 0 {
+		log.Fatal("Imgproxy key not set")
+	}
+
+	return imgproxyKey
+}
+
+func GetImgproxySalt() []byte {
+	if len(imgproxySalt) == 0 {
+		log.Fatal("Imgproxy salt not set")
+	}
+
+	return imgproxySalt
+}
+
+func SetImgproxySecrets(key string, salt string) {
+	if key == "943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881" || salt == "520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5" {
+		log.Warning("Using default imgproxy secrets, this is not recommended in production and is a DoS risk")
+	}
+
+	imgproxyKey, _ = hex.DecodeString(key)
+	imgproxySalt, _ = hex.DecodeString(salt)
+}
+
 func GetMeiliClient() *meilisearch.Client {
 	if meiliClient == nil {
-		panic("Meili client not initialized")
+		log.Fatal("Meili client not initialized")
 	}
 
 	if !meiliClient.IsHealthy() {
-		panic("Meili client is not healthy")
+		log.Fatal("Meili client is not healthy")
 	}
 
 	log.Debug("Meili client is healthy and initialized, returning instance")
@@ -80,13 +126,13 @@ func GetMeiliClient() *meilisearch.Client {
 
 func GetRedis() *redis.Client {
 	if redisClient == nil {
-		panic("Redis client not initialized")
+		log.Fatal("Redis client not initialized")
 	}
 
 	// check if redis is healthy
 	_, err := redisClient.Ping(context.Background()).Result()
 	if err != nil {
-		panic("Redis client is not healthy")
+		log.Fatal("Redis client is not healthy")
 	}
 
 	log.Debug("Redis client is healthy and initialized, returning instance")
@@ -171,17 +217,18 @@ func SearchImages(query string, limit int, shuffle bool) ([]ImageEntry, int, err
 		}
 
 		results = append(results, ImageEntry{
-			ID:        value["ID"].(string),
-			URL:       GetBaseURL() + "/images/" + value["Filename"].(string),
-			Tags:      tags,
-			Tagstring: value["Tagstring"].(string),
-			Rating:    value["Rating"].(string),
-			Added:     value["Added"].(string),
-			PHash:     uint64(value["PHash"].(float64)),
-			Size:      int(value["Size"].(float64)),
-			Width:     int(value["Width"].(float64)),
-			Height:    int(value["Height"].(float64)),
-			Filename:  value["Filename"].(string),
+			ID:           value["ID"].(string),
+			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
+			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
+			Tags:         tags,
+			Tagstring:    value["Tagstring"].(string),
+			Rating:       value["Rating"].(string),
+			Added:        value["Added"].(string),
+			PHash:        uint64(value["PHash"].(float64)),
+			Size:         int(value["Size"].(float64)),
+			Width:        int(value["Width"].(float64)),
+			Height:       int(value["Height"].(float64)),
+			Filename:     value["Filename"].(string),
 		})
 	}
 	if shuffle {
@@ -204,6 +251,8 @@ func GetImageEntryFromID(id string) (ImageEntry, error) {
 	}
 
 	image.URL = GetBaseURL() + "/images/" + image.Filename
+	image.ThumbnailURL = GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+image.Filename)
+
 	return image, nil
 }
 
@@ -300,17 +349,18 @@ func GetRandomImage() (ImageEntry, error) {
 		}
 
 		image = ImageEntry{
-			ID:        value["ID"].(string),
-			URL:       GetBaseURL() + "/images/" + value["Filename"].(string),
-			Tags:      tags,
-			Tagstring: value["Tagstring"].(string),
-			Rating:    value["Rating"].(string),
-			Added:     value["Added"].(string),
-			PHash:     uint64(value["PHash"].(float64)),
-			Size:      int(value["Size"].(float64)),
-			Width:     int(value["Width"].(float64)),
-			Height:    int(value["Height"].(float64)),
-			Filename:  value["Filename"].(string),
+			ID:           value["ID"].(string),
+			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
+			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
+			Tags:         tags,
+			Tagstring:    value["Tagstring"].(string),
+			Rating:       value["Rating"].(string),
+			Added:        value["Added"].(string),
+			PHash:        uint64(value["PHash"].(float64)),
+			Size:         int(value["Size"].(float64)),
+			Width:        int(value["Width"].(float64)),
+			Height:       int(value["Height"].(float64)),
+			Filename:     value["Filename"].(string),
 		}
 	}
 
@@ -319,16 +369,26 @@ func GetRandomImage() (ImageEntry, error) {
 
 func DBImageToGraphImage(image ImageEntry) *model.Image {
 	return &model.Image{
-		ID:        image.ID,
-		URL:       image.URL,
-		Tags:      image.Tags,
-		Tagstring: image.Tagstring,
-		Rating:    model.Rating(image.Rating),
-		Added:     image.Added,
-		PHash:     strconv.FormatUint(image.PHash, 10),
-		Size:      image.Size,
-		Width:     image.Width,
-		Height:    image.Height,
-		Filename:  image.Filename,
+		ID:           image.ID,
+		URL:          image.URL,
+		ThumbnailURL: image.ThumbnailURL,
+		Tags:         image.Tags,
+		Tagstring:    image.Tagstring,
+		Rating:       model.Rating(image.Rating),
+		Added:        image.Added,
+		PHash:        strconv.FormatUint(image.PHash, 10),
+		Size:         image.Size,
+		Width:        image.Width,
+		Height:       image.Height,
+		Filename:     image.Filename,
 	}
+}
+
+func SignImgproxyURL(path string) string {
+	mac := hmac.New(sha256.New, GetImgproxyKey())
+	mac.Write(GetImgproxySalt())
+	mac.Write([]byte("/" + path))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	return "/" + signature + "/" + path
 }

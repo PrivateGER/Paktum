@@ -7,7 +7,6 @@ require (
 	github.com/corona10/goimagehash v1.1.0
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/google/uuid v1.3.0
 	github.com/jinzhu/copier v0.3.5
 	github.com/meilisearch/meilisearch-go v0.20.1
 	github.com/schollz/progressbar/v3 v3.11.0

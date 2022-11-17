@@ -10,12 +10,13 @@ import (
 
 // A full image with all available metadata.
 type Image struct {
-	ID        string   `json:"ID"`
-	URL       string   `json:"Url"`
-	Tags      []string `json:"Tags"`
-	Tagstring string   `json:"Tagstring"`
-	Rating    Rating   `json:"Rating"`
-	Added     string   `json:"Added"`
+	ID           string   `json:"ID"`
+	URL          string   `json:"Url"`
+	ThumbnailURL string   `json:"ThumbnailUrl"`
+	Tags         []string `json:"Tags"`
+	Tagstring    string   `json:"Tagstring"`
+	Rating       Rating   `json:"Rating"`
+	Added        string   `json:"Added"`
 	// uint64 perception hash encoded as String. They can be compared using Hamming distance.
 	PHash string `json:"PHash"`
 	// Size in bytes.
@@ -29,17 +30,18 @@ type Image struct {
 
 // An image that is nested in some way. This does not contain the Related field, but is otherwise identical to Image.
 type NestedImage struct {
-	ID        string   `json:"ID"`
-	URL       string   `json:"Url"`
-	Tags      []string `json:"Tags"`
-	Tagstring string   `json:"Tagstring"`
-	Rating    Rating   `json:"Rating"`
-	Added     string   `json:"Added"`
-	PHash     string   `json:"PHash"`
-	Size      int      `json:"Size"`
-	Width     int      `json:"Width"`
-	Height    int      `json:"Height"`
-	Filename  string   `json:"Filename"`
+	ID           string   `json:"ID"`
+	URL          string   `json:"Url"`
+	ThumbnailURL string   `json:"ThumbnailUrl"`
+	Tags         []string `json:"Tags"`
+	Tagstring    string   `json:"Tagstring"`
+	Rating       Rating   `json:"Rating"`
+	Added        string   `json:"Added"`
+	PHash        string   `json:"PHash"`
+	Size         int      `json:"Size"`
+	Width        int      `json:"Width"`
+	Height       int      `json:"Height"`
+	Filename     string   `json:"Filename"`
 }
 
 // The safety rating.

@@ -19,6 +19,7 @@ A full image with all available metadata.
 type Image {
   ID: String!
   Url: String!
+  ThumbnailUrl: String!
   Tags: [String!]!
   Tagstring: String!
   Rating: Rating!
@@ -46,6 +47,7 @@ An image that is nested in some way. This does not contain the Related field, bu
 type NestedImage {
   ID: String!
   Url: String!
+  ThumbnailUrl: String!
   Tags: [String!]!
   Tagstring: String!
   Rating: Rating!

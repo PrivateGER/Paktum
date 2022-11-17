@@ -33,4 +33,6 @@ VOLUME /home/paktum/images
 # Copy over Paktum
 COPY --from=0 /go/src/Paktum/Paktum /home/paktum
 
+EXPOSE 8080
+
 ENTRYPOINT ["/home/paktum/Paktum"]

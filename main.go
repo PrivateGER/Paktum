@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -34,15 +33,21 @@ func init() {
 	log.SetLevel(ll)
 }
 
-var meiliClient *meilisearch.Client
-var redisClient *redis.Client
-
 func main() {
 	var mode string
 	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
 	var serverBaseURL string
-	flag.StringVar(&serverBaseURL, "base-url", "http://localhost:8080", "The base URL of the server. No trailing slash.")
+	flag.StringVar(&serverBaseURL, "base-url", "http://paktum.localtest.me", "The base URL of the Paktum server. No trailing slash.")
+
+	var imgproxyBaseURL string
+	flag.StringVar(&imgproxyBaseURL, "imgproxy-url", "http://imgproxy.localtest.me", "The base URL of the imgproxy server. No trailing slash.")
+
+	var imgproxyKey string
+	flag.StringVar(&imgproxyKey, "imgproxy-key", "943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881", "The key to use for imgproxy.")
+
+	var imgproxySalt string
+	flag.StringVar(&imgproxySalt, "imgproxy-salt", "520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5", "The salt to use for imgproxy.")
 
 	// redis is shared by server and scrape mode and used as a transfer layer
 	var redisHostname string
@@ -103,6 +108,8 @@ func main() {
 	Database.ConnectRedis(redisHostname, redisPass, 0)
 	Database.ConnectMeilisearch(meiliHostname, meiliKey)
 	Database.SetBaseURL(serverBaseURL)
+	Database.SetImgproxyBaseUrl(imgproxyBaseURL)
+	Database.SetImgproxySecrets(imgproxyKey, imgproxySalt)
 
 	if mode == "scrape" {
 		ScrapeMode()

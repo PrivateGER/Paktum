@@ -14,6 +14,7 @@ import (
 )
 
 func ServerMode(imageDir string) {
+
 	rand.Seed(time.Now().UnixNano())
 	r := gin.Default()
 
@@ -97,7 +98,7 @@ func ServerMode(imageDir string) {
 
 	r.Static("/images/", imageDir)
 
-	r.GET("/", playgroundHandler())
+	r.GET("/playground", playgroundHandler())
 
 	r.POST("/query", graphqlHandler())
 

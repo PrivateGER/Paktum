@@ -1,4 +1,23 @@
 services:
+  traefik:
+    image: "traefik:v2.9"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      # this exposes the traefik dashboard, disable in prod
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    depends_on:
+      - paktum_server
+      - meilisearch
+
   meilisearch:
     image: getmeili/meilisearch:v0.28.1
     restart: unless-stopped
@@ -8,9 +27,15 @@ services:
       - meilisearch-data:/meili_data
     environment:
       MEILI_MASTER_KEY: 'meiliKey'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.meili.rule=Host(`meili.localtest.me`)"
+      - "traefik.http.routers.meili.entrypoints=web"
+
   redis:
     image: redis:6.2.6
     restart: unless-stopped
+
   paktum_server:
     image: privateger/paktum:master
     restart: unless-stopped
@@ -19,14 +44,17 @@ services:
     depends_on:
       - redis
       - meilisearch
-    ports:
-      - 8080:8080
     command:
       - "--mode=server"
       - "--redis=redis:6379"
       - "--meilihost=http://meilisearch:7700"
       - "--meilikey=meiliKey"
       - "--imageDir=/home/paktum/images/"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paktum.rule=Host(`paktum.localtest.me`)"
+      - "traefik.http.routers.paktum.entrypoints=web"
+
   image_processor:
     image: privateger/paktum:master
     restart: unless-stopped
@@ -41,6 +69,7 @@ services:
       - "--meilihost=http://meilisearch:7700"
       - "--meilikey=meiliKey"
       - "--imageDir=/home/paktum/images/"
+
   image_scraper:
     image: privateger/paktum:master
     restart: "no"
@@ -51,6 +80,7 @@ services:
       - "--redis=redis:6379"
     profiles:
       - donotstart
+
   image_cleanup:
     image: privateger/paktum:master
     restart: "no"
@@ -65,6 +95,20 @@ services:
       - "--meilikey=meiliKey"
     profiles:
       - donotstart
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.imgproxy.rule=Host(`imgproxy.localtest.me`)"
+      - "traefik.http.routers.imgproxy.entrypoints=web"
+    environment:
+      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/mnt/images
+      - IMGPROXY_KEY=943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881
+      - IMGPROXY_SALT=520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5
+    volumes:
+      - "images:/mnt/images"
+    user: 100:101
 
 volumes:
     images:
