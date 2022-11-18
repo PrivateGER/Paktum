@@ -73,6 +73,6 @@ type Query {
   Limit must be 0 < limit <= 100.
   Shuffle will randomize the order of the results.
   """
-  searchImages(query: String!, limit: Int!, shuffle: Boolean): [Image!]!
+  searchImages(query: String!, limit: Int!, shuffle: Boolean, rating:Rating): [Image!]!
 }
 

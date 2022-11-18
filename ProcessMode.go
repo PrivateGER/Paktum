@@ -37,7 +37,7 @@ func ProcessMode(imageDir string) {
 	}
 
 	imageCollection := Database.GetMeiliClient().Index("images")
-	task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring"})
+	task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring", "Rating", "Tags", "Filename"})
 	if err != nil {
 		log.Fatal("Failed to update filterable attributes:", err)
 	}
@@ -144,7 +144,7 @@ func ProcessMode(imageDir string) {
 					URL:       image.FileURL,
 					Tags:      image.Tags,
 					Tagstring: strings.Join(image.Tags, " "),
-					Rating:    image.Rating,
+					Rating:    Database.Rating(image.Rating),
 					Added:     strconv.FormatUint(uint64(time.Now().Unix()), 10),
 					PHash:     phash,
 					Size:      size,

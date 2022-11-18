@@ -15,6 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,7 +25,7 @@ type ImageEntry struct {
 	ThumbnailURL string   `json:"ThumbnailURL"`
 	Tags         []string `json:"Tags"`
 	Tagstring    string   `json:"Tagstring"`
-	Rating       string   `json:"Rating"`
+	Rating       Rating   `json:"Rating"`
 	Added        string   `json:"Added"`
 	PHash        uint64   `json:"PHash"`
 	Size         int      `json:"Size"`
@@ -32,6 +33,15 @@ type ImageEntry struct {
 	Height       int      `json:"Height"`
 	Filename     string   `json:"Filename"`
 }
+
+type Rating string
+
+const (
+	RatingExplicit     Rating = "explicit"
+	RatingQuestionable Rating = "questionable"
+	RatingSafe         Rating = "safe"
+	RatingGeneral      Rating = "general"
+)
 
 var meiliClient *meilisearch.Client
 var redisClient *redis.Client
@@ -170,16 +180,28 @@ func GetPHashGroup(pHash uint64) ([][]PHashEntry, error) {
  * @param query The tagstring to search for
  * @param limit The maximum number of results to return
  * @param shuffle Whether to return the results in a random order
- * @return A list of ImageEntry objects, the total number of results, and an possible error
+ * @param rating Return only images with this rating [if nil, accepts all]
+ * @return A list of ImageEntry objects, the total number of results, and a possible error
  */
-func SearchImages(query string, limit int, shuffle bool) ([]ImageEntry, int, error) {
+func SearchImages(query string, limit int, shuffle bool, rating string) ([]ImageEntry, int, error) {
 	imageIndex := meiliClient.Index("images")
 
 	// We first run a search to get the total results for this query
 	// This way we can run the "proper" search with a randomized offset, giving unique results every time
-	resultCountSearch, err := imageIndex.Search(query, &meilisearch.SearchRequest{
-		Limit: 1,
-	})
+	var resultCountSearch *meilisearch.SearchResponse
+	var err error
+	if rating == "" {
+		resultCountSearch, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit: 1,
+		})
+	} else {
+		log.Info("Searching with rating", rating)
+		resultCountSearch, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  1,
+			Filter: "Rating = '" + rating + "'",
+		})
+	}
+
 	if err != nil {
 		return []ImageEntry{}, 0, err
 	}
@@ -195,10 +217,19 @@ func SearchImages(query string, limit int, shuffle bool) ([]ImageEntry, int, err
 
 	// Offset is now randomized between 0 and result count - limit, so we can always get unique results
 	// and return enough results to fulfill the limit
-	search, err := imageIndex.Search(query, &meilisearch.SearchRequest{
-		Limit:  int64(limit),
-		Offset: int64(offset),
-	})
+	var search *meilisearch.SearchResponse
+	if rating == "" {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
+	} else {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+			Filter: "Rating = '" + rating + "'",
+		})
+	}
 
 	if err != nil {
 		return nil, 0, err
@@ -222,7 +253,7 @@ func SearchImages(query string, limit int, shuffle bool) ([]ImageEntry, int, err
 			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
 			Tags:         tags,
 			Tagstring:    value["Tagstring"].(string),
-			Rating:       value["Rating"].(string),
+			Rating:       Rating(value["Rating"].(string)),
 			Added:        value["Added"].(string),
 			PHash:        uint64(value["PHash"].(float64)),
 			Size:         int(value["Size"].(float64)),
@@ -251,7 +282,13 @@ func GetImageEntryFromID(id string) (ImageEntry, error) {
 	}
 
 	image.URL = GetBaseURL() + "/images/" + image.Filename
-	image.ThumbnailURL = GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+image.Filename)
+
+	thumbnail := GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+image.Filename)
+	if strings.HasSuffix(thumbnail, ".webm") {
+		thumbnail = ""
+	}
+
+	image.ThumbnailURL = thumbnail
 
 	return image, nil
 }
@@ -348,13 +385,18 @@ func GetRandomImage() (ImageEntry, error) {
 			tags = append(tags, tag.(string))
 		}
 
+		thumbnail := GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string))
+		if strings.HasSuffix(thumbnail, ".webm") {
+			thumbnail = ""
+		}
+
 		image = ImageEntry{
 			ID:           value["ID"].(string),
 			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
 			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
 			Tags:         tags,
 			Tagstring:    value["Tagstring"].(string),
-			Rating:       value["Rating"].(string),
+			Rating:       Rating(value["Rating"].(string)),
 			Added:        value["Added"].(string),
 			PHash:        uint64(value["PHash"].(float64)),
 			Size:         int(value["Size"].(float64)),

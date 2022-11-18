@@ -58,7 +58,7 @@ func (r *queryResolver) RandomImage(ctx context.Context) (*model.Image, error) {
 }
 
 // SearchImages is the resolver for the searchImages field.
-func (r *queryResolver) SearchImages(ctx context.Context, query string, limit int, shuffle *bool) ([]*model.Image, error) {
+func (r *queryResolver) SearchImages(ctx context.Context, query string, limit int, shuffle *bool, rating *model.Rating) ([]*model.Image, error) {
 	log.Info("Querying images with query ", query)
 
 	if shuffle == nil {
@@ -70,7 +70,14 @@ func (r *queryResolver) SearchImages(ctx context.Context, query string, limit in
 		limit = 100
 	}
 
-	images, _, err := Database.SearchImages(query, limit, *shuffle)
+	var ratingString string
+	if rating != nil {
+		ratingString = rating.String()
+	} else {
+		ratingString = ""
+	}
+
+	images, _, err := Database.SearchImages(query, limit, *shuffle, ratingString)
 	if err != nil {
 		return nil, err
 	}

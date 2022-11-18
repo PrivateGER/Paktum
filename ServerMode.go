@@ -38,7 +38,7 @@ func ServerMode(imageDir string) {
 			return
 		}
 
-		images, resultCount, err := Database.SearchImages(query, limit, true)
+		images, resultCount, err := Database.SearchImages(query, limit, true, "")
 		if err != nil {
 			return
 		}
