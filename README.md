@@ -1,7 +1,7 @@
 # Paktum
 <img src="logo.png" width="150" height="300" align="right" alt="Paktum's mascot">
 
-Paktum is a simple image-server with scraping functionality, ability to detect variants/duplicates using perceptual hashing, tag-based and full text search. It currently features a REST API, documented below.
+Paktum is a simple image-server with scraping functionality, ability to detect variants/duplicates using perceptual hashing, tag-based and full text search and can generate thumbnails using imgproxy. It currently features a REST and GraphQL API, documented below.
 
 While Paktum is a single binary, it's ran in a microservice architecture, with each service being a separate "mode". This allows for easier scaling and deployment.
 
