@@ -4,19 +4,36 @@ import (
 	"Paktum/Database"
 	"Paktum/graph"
 	"Paktum/graph/generated"
+	"embed"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"io/fs"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"time"
 )
+
+//go:embed paktum-fe/dist/*
+var embeddedFrontend embed.FS
+
+func getFrontendFS() http.FileSystem {
+	fsys, err := fs.Sub(embeddedFrontend, "paktum-fe/dist")
+	if err != nil {
+		log.Fatal("Couldn't get frontend FS: %s", err)
+		return nil
+	}
+	return http.FS(fsys)
+}
 
 func ServerMode(imageDir string) {
 
 	rand.Seed(time.Now().UnixNano())
 	r := gin.Default()
+
+	r.Use(corsMiddleware)
 
 	r.GET("/api/search", func(c *gin.Context) {
 		query := c.Query("q")
@@ -101,6 +118,11 @@ func ServerMode(imageDir string) {
 	r.GET("/playground", playgroundHandler())
 
 	r.POST("/query", graphqlHandler())
+	r.OPTIONS("/query", graphqlHandler())
+
+	r.NoRoute(func(c *gin.Context) {
+		c.FileFromFS(c.Request.URL.Path, getFrontendFS())
+	})
 
 	err := r.Run()
 	if err != nil {
@@ -125,5 +147,17 @@ func graphqlHandler() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func corsMiddleware(c *gin.Context) {
+	if Database.GetCorsEnabled() {
+		c.Header("Access-Control-Allow-Origin", Database.GetBaseURL())
+		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+	} else {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	}
 }

@@ -45,7 +45,7 @@ func RemoveImagesWithBadTags(imageDir string) {
 		for _, tag := range doc["Tags"].([]interface{}) {
 			if ImageScraper.TagIsBanned(tag.(string)) {
 				log.Info("Removing image ", id, " because it has a banned tag ", tag)
-				err := os.Remove(imageDir + doc["Filename"].(string))
+				err := os.Remove(doc["Filename"].(string))
 				if err != nil {
 					log.Error("Failed to remove image from filesystem ", id, " ", doc["Filename"].(string), ": ", err)
 				}

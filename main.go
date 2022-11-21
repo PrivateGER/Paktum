@@ -37,6 +37,9 @@ func main() {
 	var mode string
 	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
+	var enableCors bool
+	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricing API access to your set base URL")
+
 	var serverBaseURL string
 	flag.StringVar(&serverBaseURL, "base-url", "http://paktum.localtest.me", "The base URL of the Paktum server. No trailing slash.")
 
@@ -110,6 +113,7 @@ func main() {
 	Database.SetBaseURL(serverBaseURL)
 	Database.SetImgproxyBaseUrl(imgproxyBaseURL)
 	Database.SetImgproxySecrets(imgproxyKey, imgproxySalt)
+	Database.SetCorsEnabled(enableCors)
 
 	if mode == "scrape" {
 		ScrapeMode()

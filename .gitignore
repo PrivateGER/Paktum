@@ -2,3 +2,5 @@
 meilisearch
 data.ms
 images
+node_modules
+.vscode

@@ -3,3 +3,5 @@ meilisearch
 data.ms
 images
 **/generated
+**/node_modules
+**/dist

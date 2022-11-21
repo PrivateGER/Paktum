@@ -79,6 +79,16 @@ func GetBaseURL() string {
 	return baseURL
 }
 
+var corsEnabled bool
+
+func SetCorsEnabled(enabled bool) {
+	corsEnabled = enabled
+}
+
+func GetCorsEnabled() bool {
+	return corsEnabled
+}
+
 var imgproxyBaseUrl string
 var imgproxyKey []byte
 var imgproxySalt []byte
@@ -247,10 +257,15 @@ func SearchImages(query string, limit int, shuffle bool, rating string) ([]Image
 			tags = append(tags, tag.(string))
 		}
 
+		thumbnail := GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string))
+		if strings.HasSuffix(thumbnail, ".webm") {
+			thumbnail = ""
+		}
+
 		results = append(results, ImageEntry{
 			ID:           value["ID"].(string),
 			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
-			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
+			ThumbnailURL: thumbnail,
 			Tags:         tags,
 			Tagstring:    value["Tagstring"].(string),
 			Rating:       Rating(value["Rating"].(string)),
@@ -393,7 +408,7 @@ func GetRandomImage() (ImageEntry, error) {
 		image = ImageEntry{
 			ID:           value["ID"].(string),
 			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
-			ThumbnailURL: GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string)),
+			ThumbnailURL: thumbnail,
 			Tags:         tags,
 			Tagstring:    value["Tagstring"].(string),
 			Rating:       Rating(value["Rating"].(string)),
