@@ -1,4 +1,4 @@
-export const GRAPHQL_ENDPOINT = "http://paktum.localtest.me/query";
+export const GRAPHQL_ENDPOINT = "/query";
 
 export enum Rating {
     explicit = 'explicit',
