@@ -59,6 +59,25 @@ type NestedImage {
   Filename: String!
 }
 
+type ServerStats {
+    """
+    The version of the server.
+    """
+    Version: String!
+    """
+    The number of images in the database.
+    """
+    ImageCount: Int!
+    """
+    The number of PHash groups in the database.
+    """
+    GroupCount: Int!
+    """
+    The uptime of the server.
+    """
+    Uptime: String!
+}
+
 type Query {
   """
   Retrieves an image by its ID.
@@ -74,5 +93,11 @@ type Query {
   Shuffle will randomize the order of the results.
   """
   searchImages(query: String!, limit: Int!, shuffle: Boolean, rating:Rating): [Image!]!
+
+  """
+  Get information about the server.
+  Restricted to admin users.
+  """
+  ServerStats: ServerStats!
 }
 

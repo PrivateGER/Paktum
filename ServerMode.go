@@ -4,6 +4,7 @@ import (
 	"Paktum/Database"
 	"Paktum/graph"
 	"Paktum/graph/generated"
+	"context"
 	"embed"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
@@ -117,8 +118,10 @@ func ServerMode(imageDir string) {
 
 	r.GET("/playground", playgroundHandler())
 
-	r.POST("/query", graphqlHandler())
-	r.OPTIONS("/query", graphqlHandler())
+	gqlGroup := r.Group("")
+	gqlGroup.Use(graphqlAuthMiddleware)
+	gqlGroup.POST("/query", graphqlHandler())
+	gqlGroup.OPTIONS("/query", graphqlHandler())
 
 	r.NoRoute(func(c *gin.Context) {
 		c.FileFromFS(c.Request.URL.Path, getFrontendFS())
@@ -136,6 +139,33 @@ func playgroundHandler() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+// / Verifies Authorization header to be matching the admin token, if so context contains admin key with true value
+func graphqlAuthMiddleware(c *gin.Context) {
+	cookie, err := c.Cookie("auth")
+	var cookieToken string
+	if err != nil {
+		cookieToken = cookie
+	}
+
+	var headerToken string
+	if len(c.Request.Header.Get("Authorization")) > 7 {
+		headerToken = c.Request.Header.Get("Authorization")[7:] // remove "Bearer " from token
+	}
+
+	if headerToken == "" && cookieToken == "" {
+		ctx := context.WithValue(c.Request.Context(), "admin", false)
+		c.Request = c.Request.WithContext(ctx)
+		return
+	}
+
+	if Database.GetAdminToken() != "" && (cookieToken == Database.GetAdminToken() || headerToken == Database.GetAdminToken()) {
+		ctx := context.WithValue(c.Request.Context(), "admin", true)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+		return
 	}
 }
 

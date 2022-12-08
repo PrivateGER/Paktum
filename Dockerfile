@@ -27,7 +27,9 @@ COPY --from=0 /home/node/app/dist ./paktum-fe/dist
 
 # Build code
 COPY . ./
-RUN go build -o Paktum Paktum
+COPY .git ./.git
+RUN go generate ./...
+RUN go build -v -o Paktum Paktum
 
 FROM alpine:latest
 LABEL maintainer="privateger@privateger.me"

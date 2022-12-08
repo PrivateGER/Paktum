@@ -8,7 +8,8 @@ import (
 	"Paktum/graph/generated"
 	"Paktum/graph/model"
 	"context"
-
+	"fmt"
+	sentry "github.com/getsentry/sentry-go"
 	"github.com/jinzhu/copier"
 	log "github.com/sirupsen/logrus"
 )
@@ -94,6 +95,34 @@ func (r *queryResolver) SearchImages(ctx context.Context, query string, limit in
 	}
 
 	return convertedImages, nil
+}
+
+// ServerStats is the resolver for the ServerStats field.
+func (r *queryResolver) ServerStats(ctx context.Context) (*model.ServerStats, error) {
+	if (ctx.Value("admin") == nil) || (ctx.Value("admin").(bool) == false) {
+		sentry.CaptureEvent(&sentry.Event{
+			Message: "Unauthorized access to server stats",
+			Level:   sentry.LevelWarning,
+		})
+		return nil, fmt.Errorf("not authorized")
+	}
+
+	uptime := Database.GetUptime()
+	totalImageCount, err := Database.GetTotalImageCount()
+	if err != nil {
+		return nil, err
+	}
+	phashGroups, err := Database.GetPHashGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ServerStats{
+		Version:    Database.GetVersion(),
+		ImageCount: totalImageCount,
+		GroupCount: len(phashGroups),
+		Uptime:     fmt.Sprintf("%dh %dm %ds", int(uptime.Hours()), int(uptime.Minutes())%60, int(uptime.Seconds())%60),
+	}, nil
 }
 
 // Image returns generated.ImageResolver implementation.

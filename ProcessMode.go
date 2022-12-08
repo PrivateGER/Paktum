@@ -48,9 +48,9 @@ func ProcessMode(imageDir string) {
 
 	for {
 		// read from redis
-		log.Info("Sending BLPOP to redis at key paktum:metadata_process")
-		result, err := Database.GetRedis().BLPop(context.TODO(), time.Second*10, "paktum:metadata_process").Result()
-		log.Info("Received BLPOP response from redis")
+		log.Debug("Sending BLPOP to redis at key paktum:metadata_process")
+		result, err := Database.GetRedis().BLPop(context.TODO(), time.Second*180, "paktum:metadata_process").Result()
+		log.Debug("Received BLPOP response from redis")
 		if err != nil {
 			if err != redis.Nil {
 				log.Error("Error reading from redis:", err.Error())

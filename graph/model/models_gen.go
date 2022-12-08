@@ -44,6 +44,17 @@ type NestedImage struct {
 	Filename     string   `json:"Filename"`
 }
 
+type ServerStats struct {
+	// The version of the server.
+	Version string `json:"Version"`
+	// The number of images in the database.
+	ImageCount int `json:"ImageCount"`
+	// The number of PHash groups in the database.
+	GroupCount int `json:"GroupCount"`
+	// The uptime of the server.
+	Uptime string `json:"Uptime"`
+}
+
 // The safety rating.
 // General is SFW, Safe is SFW but may contain some adult content, and questionable up should be considered NSFW.
 type Rating string

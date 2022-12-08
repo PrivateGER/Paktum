@@ -44,12 +44,13 @@ services:
     depends_on:
       - redis
       - meilisearch
-    command:
-      - "--mode=server"
-      - "--redis=redis:6379"
-      - "--meilihost=http://meilisearch:7700"
-      - "--meilikey=meiliKey"
-      - "--imageDir=/home/paktum/images/"
+    environment:
+      - MODE=server
+      - REDIS=redis:6379
+      - MEILIHOST=http://meilisearch:7700
+      - MEILIKEY=meiliKey
+      - IMAGEDIR=/home/paktum/images/
+      - ADMIN_TOKEN=test
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.paktum.rule=Host(`paktum.localtest.me`)"

@@ -9,8 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/gob"
-	"encoding/hex"
-	"github.com/go-redis/redis/v8"
+	"github.com/getsentry/sentry-go"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
@@ -43,130 +42,16 @@ const (
 	RatingGeneral      Rating = "general"
 )
 
-var meiliClient *meilisearch.Client
-var redisClient *redis.Client
-
-func ConnectMeilisearch(host string, apiKey string) *meilisearch.Client {
-	meiliClient = meilisearch.NewClient(meilisearch.ClientConfig{
-		Host:   host,
-		APIKey: apiKey,
-	})
-
-	return meiliClient
-}
-
-func ConnectRedis(host string, password string, db int) *redis.Client {
-	redisClient = redis.NewClient(&redis.Options{
-		Addr:     host,
-		Password: password,
-		DB:       db,
-	})
-
-	return redisClient
-}
-
-var baseURL string
-
-func SetBaseURL(url string) {
-	baseURL = url
-}
-
-func GetBaseURL() string {
-	if baseURL == "" {
-		log.Fatal("Base URL not set")
-	}
-
-	return baseURL
-}
-
-var corsEnabled bool
-
-func SetCorsEnabled(enabled bool) {
-	corsEnabled = enabled
-}
-
-func GetCorsEnabled() bool {
-	return corsEnabled
-}
-
-var imgproxyBaseUrl string
-var imgproxyKey []byte
-var imgproxySalt []byte
-
-func SetImgproxyBaseUrl(url string) {
-	imgproxyBaseUrl = url
-}
-
-func GetImgproxyBaseUrl() string {
-	if imgproxyBaseUrl == "" {
-		log.Fatal("Imgproxy base URL not set")
-	}
-
-	return imgproxyBaseUrl
-}
-
-func GetImgproxyKey() []byte {
-	if len(imgproxyKey) == 0 {
-		log.Fatal("Imgproxy key not set")
-	}
-
-	return imgproxyKey
-}
-
-func GetImgproxySalt() []byte {
-	if len(imgproxySalt) == 0 {
-		log.Fatal("Imgproxy salt not set")
-	}
-
-	return imgproxySalt
-}
-
-func SetImgproxySecrets(key string, salt string) {
-	if key == "943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881" || salt == "520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5" {
-		log.Warning("Using default imgproxy secrets, this is not recommended in production and is a DoS risk")
-	}
-
-	imgproxyKey, _ = hex.DecodeString(key)
-	imgproxySalt, _ = hex.DecodeString(salt)
-}
-
-func GetMeiliClient() *meilisearch.Client {
-	if meiliClient == nil {
-		log.Fatal("Meili client not initialized")
-	}
-
-	if !meiliClient.IsHealthy() {
-		log.Fatal("Meili client is not healthy")
-	}
-
-	log.Debug("Meili client is healthy and initialized, returning instance")
-
-	return meiliClient
-}
-
-func GetRedis() *redis.Client {
-	if redisClient == nil {
-		log.Fatal("Redis client not initialized")
-	}
-
-	// check if redis is healthy
-	_, err := redisClient.Ping(context.Background()).Result()
-	if err != nil {
-		log.Fatal("Redis client is not healthy")
-	}
-
-	log.Debug("Redis client is healthy and initialized, returning instance")
-
-	return redisClient
-}
-
 var lastPHashFetch uint64
 var phashGroupMap [][]PHashEntry
 
-func GetPHashGroup(pHash uint64) ([][]PHashEntry, error) {
+/* GetPHashes returns a list of all phash groups in the database
+ * @return A list of phash groups
+ */
+func GetPHashGroups() ([][]PHashEntry, error) {
 	// If the last fetch of this was longer than 5 minutes ago, fetch a fresh copy from the redis db
 	if lastPHashFetch+300 < uint64(time.Now().Unix()) {
-		groupGob, err := redisClient.Get(context.TODO(), "paktum:image_alts").Result()
+		groupGob, err := GetRedis().Get(context.TODO(), "paktum:image_alts").Result()
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +79,7 @@ func GetPHashGroup(pHash uint64) ([][]PHashEntry, error) {
  * @return A list of ImageEntry objects, the total number of results, and a possible error
  */
 func SearchImages(query string, limit int, shuffle bool, rating string) ([]ImageEntry, int, error) {
-	imageIndex := meiliClient.Index("images")
+	imageIndex := GetMeiliClient().Index("images")
 
 	// We first run a search to get the total results for this query
 	// This way we can run the "proper" search with a randomized offset, giving unique results every time
@@ -286,10 +171,14 @@ func SearchImages(query string, limit int, shuffle bool, rating string) ([]Image
 	return results, int(search.EstimatedTotalHits), nil
 }
 
+/* GetImageByID returns an image matching the given ID
+ * @param id The ID of the image to return
+ * @return The image entry, or nil if no image was found
+ */
 func GetImageEntryFromID(id string) (ImageEntry, error) {
 	var image ImageEntry
 
-	err := meiliClient.Index("images").GetDocument(id, &meilisearch.DocumentQuery{
+	err := GetMeiliClient().Index("images").GetDocument(id, &meilisearch.DocumentQuery{
 		Fields: nil,
 	}, &image)
 	if err != nil {
@@ -308,6 +197,11 @@ func GetImageEntryFromID(id string) (ImageEntry, error) {
 	return image, nil
 }
 
+/* GetRelatedImages returns a list of images that are similar to the given image
+ * Do not call this recursively, it will run infinitely
+ * @param image The image to find similar images for
+ * @return A list of similar images
+ */
 func GetRelatedImages(id string) ([]ImageEntry, error) {
 	images, err := GetRelatedImageIDs(id)
 	if err != nil {
@@ -326,14 +220,14 @@ func GetRelatedImages(id string) ([]ImageEntry, error) {
 	return imageEntries, nil
 }
 
+/* GetRelatedImageIDs returns a list of image IDs that are similar to the given image
+ * Do not call this recursively, it will run infinitely
+ * @param image The image to find similar images for
+ * @return A list of similar image IDs
+ */
 func GetRelatedImageIDs(id string) ([]string, error) {
-	image, err := GetImageEntryFromID(id)
-	if err != nil {
-		return nil, err
-	}
-
 	// Get the phash group for this image
-	phashGroups, err := GetPHashGroup(image.PHash)
+	phashGroups, err := GetPHashGroups()
 	if err != nil {
 		return nil, err
 	}
@@ -357,22 +251,19 @@ func GetRelatedImageIDs(id string) ([]string, error) {
 	return nil, nil
 }
 
+/* GetRandomImage returns a random image from the database
+ * @return The image entry, or nil if no image was found
+ */
 func GetRandomImage() (ImageEntry, error) {
-	imageIndex := meiliClient.Index("images")
+	imageIndex := GetMeiliClient().Index("images")
 
-	// We first run a search to get the total count of documents
-	// This gives us an offset we can use to get a random image
-	resultCountSearch, err := imageIndex.Search("", &meilisearch.SearchRequest{
-		Limit: 1,
-	})
+	totalImageCount, err := GetTotalImageCount()
 	if err != nil {
+		sentry.CaptureException(err)
 		return ImageEntry{}, err
 	}
-	if resultCountSearch.EstimatedTotalHits == 0 {
-		return ImageEntry{}, nil
-	}
 
-	maxOffset := int(resultCountSearch.EstimatedTotalHits) - 1
+	maxOffset := totalImageCount - 1
 	offset := rand.Intn(maxOffset)
 
 	// Offset is now randomized between 0 and result count - limit, so we can always get unique results
@@ -422,6 +313,27 @@ func GetRandomImage() (ImageEntry, error) {
 	}
 
 	return image, nil
+}
+
+/* GetTotalImageCount returns the total number of images in the database
+ * @return The total number of images
+ */
+func GetTotalImageCount() (int, error) {
+	imageIndex := GetMeiliClient().Index("images")
+
+	// We first run a search to get the total count of documents
+	// This gives us an offset we can use to get a random image
+	resultCountSearch, err := imageIndex.Search("", &meilisearch.SearchRequest{
+		Limit: 1,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if resultCountSearch.EstimatedTotalHits == 0 {
+		return 0, nil
+	}
+
+	return int(resultCountSearch.EstimatedTotalHits), nil
 }
 
 func DBImageToGraphImage(image ImageEntry) *model.Image {

@@ -3,8 +3,9 @@ package main
 import (
 	"Paktum/Database"
 	"bytes"
-	"flag"
 	"fmt"
+	"github.com/getsentry/sentry-go"
+	"github.com/jnovack/flag"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -34,11 +35,18 @@ func init() {
 }
 
 func main() {
+	err := sentry.Init(sentry.ClientOptions{
+		Dsn: "http://c00568e1589646fe828fd7cd2196f734@glitchtip.pxroute.net/1",
+	})
+	if err != nil {
+		log.Error("Failed to initialize sentry error logging:", err.Error())
+	}
+
 	var mode string
 	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
 	var enableCors bool
-	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricing API access to your set base URL")
+	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricting API access to your set base URL")
 
 	var serverBaseURL string
 	flag.StringVar(&serverBaseURL, "base-url", "http://paktum.localtest.me", "The base URL of the Paktum server. No trailing slash.")
@@ -72,6 +80,12 @@ func main() {
 	var port int
 	flag.IntVar(&port, "port", 9000, "The port to run the server on")
 
+	var adminToken string
+	flag.StringVar(&adminToken, "admin-token", "", "The admin token to use for the GraphQL API")
+	if adminToken == "" {
+		log.Warning("No admin token set, access to administrative features will be disabled")
+	}
+
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 	flag.Parse()
@@ -79,6 +93,7 @@ func main() {
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
+			sentry.CaptureException(err)
 			log.Fatal(err)
 		}
 		err = pprof.StartCPUProfile(f)
@@ -114,6 +129,7 @@ func main() {
 	Database.SetImgproxyBaseUrl(imgproxyBaseURL)
 	Database.SetImgproxySecrets(imgproxyKey, imgproxySalt)
 	Database.SetCorsEnabled(enableCors)
+	Database.SetAdminToken(adminToken)
 
 	if mode == "scrape" {
 		ScrapeMode()
@@ -134,6 +150,7 @@ func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
 		Filter: filter,
 	})
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Error("Failed to search meili:", err.Error())
 		return false
 	}
@@ -219,6 +236,7 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 		err = cmd.Run()
 
 		if err != nil {
+			sentry.CaptureException(err)
 			log.Error("ffmpeg error: ", err, stderrBuffer.String())
 		}
 
