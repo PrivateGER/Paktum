@@ -10,6 +10,8 @@ COPY --chown=node:node paktum-fe .
 RUN NODE_ENV=development npm run build
 
 FROM golang:1.19
+ARG COMMIT_REF
+ENV COMMIT_REF=$COMMIT_REF
 
 WORKDIR /go/src/Paktum
 
@@ -27,7 +29,7 @@ COPY --from=0 /home/node/app/dist ./paktum-fe/dist
 
 # Build code
 COPY . ./
-COPY .git ./.git
+COPY .gi[t] ./.git
 RUN go generate ./...
 RUN go build -v -o Paktum Paktum
 

@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
 
-# Get the git hash of the current commit
-git rev-parse HEAD > git_hash.txt
+if [[ -z "${COMMIT_REF}" ]]; then
+  HASH="$(git rev-parse HEAD)"
+else
+  # Running in CI, use the COMMIT_REF environment variable
+  HASH="${COMMIT_REF}"
+fi
+
+echo "${HASH}" > git_hash.txt
