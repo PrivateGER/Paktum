@@ -36,14 +36,14 @@ func init() {
 
 func main() {
 	err := sentry.Init(sentry.ClientOptions{
-		Dsn: "http://c00568e1589646fe828fd7cd2196f734@glitchtip.pxroute.net/1",
+		Dsn: "https://c00568e1589646fe828fd7cd2196f734@glitchtip.pxroute.net/1",
 	})
 	if err != nil {
 		log.Error("Failed to initialize sentry error logging:", err.Error())
 	}
 
 	var mode string
-	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
+	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup', 'inference' or 'server'")
 
 	var enableCors bool
 	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricting API access to your set base URL")
@@ -131,15 +131,30 @@ func main() {
 	Database.SetCorsEnabled(enableCors)
 	Database.SetAdminToken(adminToken)
 
-	if mode == "scrape" {
-		ScrapeMode()
-	} else if mode == "process" {
-		ProcessMode(imageDir)
-	} else if mode == "cleanup" {
-		CleanupMode(imageDir)
-	} else if mode == "server" {
-		ServerMode(imageDir)
-	}
+	func() { // Sentry harness to catch any panic that propagates to the top level
+		defer func() {
+			err := sentry.Recover()
+			if err != nil {
+				log.Error("Sentry recovered panic:", err)
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(5 * time.Second)
+			}
+		}()
+
+		if mode == "scrape" {
+			ScrapeMode()
+		} else if mode == "process" {
+			ProcessMode(imageDir)
+		} else if mode == "cleanup" {
+			CleanupMode(imageDir)
+		} else if mode == "server" {
+			ServerMode(imageDir)
+		} else {
+			log.Error("Please choose a valid server operation mode")
+			flag.Usage()
+			os.Exit(1)
+		}
+	}()
 }
 
 func imageExists(meiliIndex *meilisearch.Index, md5 string) bool {
@@ -173,7 +188,14 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 	}
 
 	resp, err := http.Get(url)
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+
+		if err != nil {
+			sentry.CaptureException(err)
+			log.Error("Failed to close body:", err.Error())
+		}
+	}(resp.Body)
 	if err != nil {
 		log.Error("Failed to download image:", err.Error())
 		return err, 0, 0, 0, 0

@@ -6,8 +6,11 @@ import (
 	"Paktum/graph/generated"
 	"context"
 	"embed"
+	"errors"
+	"fmt"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"io/fs"
@@ -158,12 +161,22 @@ func graphqlAuthMiddleware(c *gin.Context) {
 	if headerToken == "" && cookieToken == "" {
 		ctx := context.WithValue(c.Request.Context(), "admin", false)
 		c.Request = c.Request.WithContext(ctx)
+		sentry.AddBreadcrumb(&sentry.Breadcrumb{
+			Category: "graphql",
+			Message:  "User-level request",
+			Level:    sentry.LevelInfo,
+		})
 		return
 	}
 
 	if Database.GetAdminToken() != "" && (cookieToken == Database.GetAdminToken() || headerToken == Database.GetAdminToken()) {
 		ctx := context.WithValue(c.Request.Context(), "admin", true)
 		c.Request = c.Request.WithContext(ctx)
+		sentry.AddBreadcrumb(&sentry.Breadcrumb{
+			Category: "graphql",
+			Message:  "Admin-level request",
+			Level:    sentry.LevelInfo,
+		})
 		c.Next()
 		return
 	}
@@ -174,6 +187,14 @@ func graphqlHandler() gin.HandlerFunc {
 	// NewExecutableSchema and Config are in the generated.go file
 	// Resolver is in the resolver.go file
 	h := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
+
+	h.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
+		log.Error("Recovered from GraphQL panic: ", err)
+		graphlqlError := fmt.Sprintf("%s", err)
+		sentry.CaptureException(errors.New(graphlqlError))
+
+		return errors.New("internal server error")
+	})
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)

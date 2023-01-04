@@ -45,6 +45,17 @@ func ProcessMode(imageDir string) {
 		os.Exit(1)
 		return
 	}
+	log.Println("Filterable attributes updated")
+
+	task, err = imageCollection.UpdateSortableAttributes(&[]string{"Added"})
+	if err != nil {
+		log.Fatal("Failed to update sortable attributes:", err)
+	}
+	if !waitForMeilisearchTask(task) {
+		os.Exit(1)
+		return
+	}
+	log.Println("Sortable attributes updated")
 
 	for {
 		// read from redis
