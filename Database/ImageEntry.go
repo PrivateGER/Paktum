@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/gob"
+	"errors"
+	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
@@ -88,6 +90,7 @@ func SearchImages(query string, limit int, shuffle bool, rating string) ([]Image
 	if rating == "" {
 		resultCountSearch, err = imageIndex.Search(query, &meilisearch.SearchRequest{
 			Limit: 1,
+			Sort:  []string{"Added:desc"},
 		})
 	} else {
 		log.Info("Searching with rating", rating)
@@ -110,19 +113,32 @@ func SearchImages(query string, limit int, shuffle bool, rating string) ([]Image
 	}
 	offset := rand.Intn(maxOffset)
 
-	// Offset is now randomized between 0 and result count - limit, so we can always get unique results
+	// Offset is now randomized between 0 and result count - limit (if shuffle disabled), so we can always get unique results
 	// and return enough results to fulfill the limit
 	var search *meilisearch.SearchResponse
-	if rating == "" {
+	if rating == "" && !shuffle {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit: int64(limit),
+			Sort:  []string{"Added:desc"},
+		})
+	} else if rating == "" && shuffle {
 		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
 			Limit:  int64(limit),
 			Offset: int64(offset),
+			Sort:   []string{"Added:desc"},
+		})
+	} else if rating != "" && !shuffle {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+			Filter: "Rating = '" + rating + "'",
 		})
 	} else {
 		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
 			Limit:  int64(limit),
 			Offset: int64(offset),
 			Filter: "Rating = '" + rating + "'",
+			Sort:   []string{"Added:desc"},
 		})
 	}
 
@@ -165,6 +181,97 @@ func SearchImages(query string, limit int, shuffle bool, rating string) ([]Image
 	if shuffle {
 		rand.Shuffle(len(results), func(i, j int) {
 			results[i], results[j] = results[j], results[i]
+		})
+	}
+
+	return results, int(search.EstimatedTotalHits), nil
+}
+
+/* SearchImagesPaginated runs a search like SearchImages, but returns a paginated result
+ * @param query The tagstring to search for
+ * @param limit The number of results to return per page
+ * @param page The page to return (1-indexed)
+ * @param rating Return only images with this rating [if nil, accepts all]
+ * @return A list of ImageEntry objects, the total number of results, and a possible error
+ */
+func SearchImagesPaginated(query string, limit int, page int, rating string) ([]ImageEntry, int, error) {
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "search",
+		Message:  "Searching for " + query,
+		Level:    sentry.LevelInfo,
+		Data: map[string]interface{}{
+			"query":  query,
+			"limit":  limit,
+			"page":   page,
+			"rating": rating,
+		},
+	})
+	imageIndex := GetMeiliClient().Index("images")
+
+	// limit is from 0 to 100
+	if limit > 100 {
+		limit = 100
+	} else if limit < 0 {
+		return []ImageEntry{}, 0, errors.New("limit must be greater than 0")
+	}
+
+	// page has to be greater than 0
+	if page < 1 {
+		return []ImageEntry{}, 0, errors.New("page must be greater than 0")
+	}
+
+	var search *meilisearch.SearchResponse
+	var err error
+	if rating == "" {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  int64(limit),
+			Offset: int64((page + 1) * limit),
+			Sort:   []string{"Added:desc"},
+		})
+	} else {
+		search, err = imageIndex.Search(query, &meilisearch.SearchRequest{
+			Limit:  int64(limit),
+			Offset: int64((page + 1) * limit),
+			Filter: "Rating = '" + rating + "'",
+			Sort:   []string{"Added:desc"},
+		})
+	}
+
+	if err != nil {
+		sentry.CaptureException(err)
+		return nil, 0, err
+	}
+
+	var results []ImageEntry
+	for _, hit := range search.Hits {
+		value := hit.(map[string]interface{})
+		var tags []string
+		for _, tag := range value["Tags"].([]interface{}) {
+			// check if tag is a banned tag, if so don't include image
+			if ImageScraper.TagIsBanned(tag.(string)) {
+				continue
+			}
+			tags = append(tags, tag.(string))
+		}
+
+		thumbnail := GetImgproxyBaseUrl() + SignImgproxyURL("rs:fill:480/g:sm/plain/local:///"+value["Filename"].(string))
+		if strings.HasSuffix(thumbnail, ".webm") {
+			thumbnail = ""
+		}
+
+		results = append(results, ImageEntry{
+			ID:           value["ID"].(string),
+			URL:          GetBaseURL() + "/images/" + value["Filename"].(string),
+			ThumbnailURL: thumbnail,
+			Tags:         tags,
+			Tagstring:    value["Tagstring"].(string),
+			Rating:       Rating(value["Rating"].(string)),
+			Added:        value["Added"].(string),
+			PHash:        uint64(value["PHash"].(float64)),
+			Size:         int(value["Size"].(float64)),
+			Width:        int(value["Width"].(float64)),
+			Height:       int(value["Height"].(float64)),
+			Filename:     value["Filename"].(string),
 		})
 	}
 
@@ -228,6 +335,11 @@ func GetRelatedImages(id string) ([]ImageEntry, error) {
 func GetRelatedImageIDs(id string) ([]string, error) {
 	// Get the phash group for this image
 	phashGroups, err := GetPHashGroups()
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "phash",
+		Message:  fmt.Sprintf("Got phash groups, count: %d", len(phashGroups)),
+	})
+
 	if err != nil {
 		return nil, err
 	}

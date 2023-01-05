@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/99designs/gqlgen v0.17.20
 	github.com/corona10/goimagehash v1.1.0
+	github.com/danhilltech/goyolov5 v0.1.0
 	github.com/getsentry/sentry-go v0.15.0
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-redis/redis/v8 v8.11.5
