@@ -45,6 +45,8 @@ func main() {
 	var mode string
 	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup' or 'server'")
 
+	flag.String(flag.DefaultConfigFlagname, "paktum.conf", "path to config file")
+
 	var enableCors bool
 	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricting API access to your set base URL")
 

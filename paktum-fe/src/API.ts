@@ -1,4 +1,5 @@
-export const GRAPHQL_ENDPOINT = "/query";
+// @ts-ignore
+export const GRAPHQL_ENDPOINT = import.meta.env.DEV ? "http://paktum.localtest.me/query" : "/query";
 
 export enum Rating {
     explicit = 'explicit',
@@ -38,12 +39,20 @@ export interface NestedImage {
     Filename: string,
 }
 
-export async function customQuery(graphqlQuery: string) {
+export interface ServerStats {
+    Version: string,
+    ImageCount: number,
+    GroupCount: number,
+    Uptime: string
+}
+
+export async function customQuery(graphqlQuery: string, authToken?: string): Promise<any> {
     let response = await fetch(GRAPHQL_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'Authorization': authToken ? `Bearer ${authToken}` : ''
         },
         body: JSON.stringify({ query: graphqlQuery })
     });
@@ -163,3 +172,17 @@ export function searchImages(query: string, limit: number, shuffle: boolean, rat
     });
 }
 
+export function getServerStats() : Promise<ServerStats> {
+    return new Promise<ServerStats>((resolve, reject) => {
+        customQuery(`
+        query {
+            serverStats {
+                Version
+                ImageCount
+                GroupCount
+                Uptime
+            }
+        }`).then(r => resolve(r.data.serverStats as ServerStats))
+            .catch((error) => reject(error));
+    });
+}

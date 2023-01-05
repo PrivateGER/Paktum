@@ -7,7 +7,7 @@ COPY paktum-fe/pnpm-lock.yaml ./
 USER node
 RUN pnpm install
 COPY --chown=node:node paktum-fe .
-RUN NODE_ENV=development npm run build
+RUN NODE_ENV=production npm run build
 
 FROM golang:1.19
 ARG COMMIT_REF
