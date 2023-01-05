@@ -3,9 +3,10 @@ package main
 import (
 	"Paktum/Database"
 	"bytes"
+	"flag"
 	"fmt"
 	"github.com/getsentry/sentry-go"
-	"github.com/jnovack/flag"
+	env_flag "github.com/jnovack/flag"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -43,54 +44,52 @@ func main() {
 	}
 
 	var mode string
-	flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup', 'inference' or 'server'")
-
-	flag.String(flag.DefaultConfigFlagname, "paktum.conf", "path to config file")
+	env_flag.StringVar(&mode, "mode", "", "The mode to run in. Either 'scrape', 'process', 'cleanup', 'inference' or 'server'")
 
 	var enableCors bool
-	flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricting API access to your set base URL")
+	env_flag.BoolVar(&enableCors, "enable-cors", false, "Enable CORS headers, restricting API access to your set base URL")
 
 	var serverBaseURL string
-	flag.StringVar(&serverBaseURL, "base-url", "http://paktum.localtest.me", "The base URL of the Paktum server. No trailing slash.")
+	env_flag.StringVar(&serverBaseURL, "base-url", "http://paktum.localtest.me", "The base URL of the Paktum server. No trailing slash.")
 
 	var imgproxyBaseURL string
-	flag.StringVar(&imgproxyBaseURL, "imgproxy-url", "http://imgproxy.localtest.me", "The base URL of the imgproxy server. No trailing slash.")
+	env_flag.StringVar(&imgproxyBaseURL, "imgproxy-url", "http://imgproxy.localtest.me", "The base URL of the imgproxy server. No trailing slash.")
 
 	var imgproxyKey string
-	flag.StringVar(&imgproxyKey, "imgproxy-key", "943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881", "The key to use for imgproxy.")
+	env_flag.StringVar(&imgproxyKey, "imgproxy-key", "943b421c9eb07c830af81030552c86009268de4e532ba2ee2eab8247c6da0881", "The key to use for imgproxy.")
 
 	var imgproxySalt string
-	flag.StringVar(&imgproxySalt, "imgproxy-salt", "520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5", "The salt to use for imgproxy.")
+	env_flag.StringVar(&imgproxySalt, "imgproxy-salt", "520f986b998545b4785e0defbc4f3c1203f22de2374a3d53cb7a7fe9fea309c5", "The salt to use for imgproxy.")
 
 	// redis is shared by server and scrape mode and used as a transfer layer
 	var redisHostname string
-	flag.StringVar(&redisHostname, "redis", "localhost:6379", "The redis server to connect to")
+	env_flag.StringVar(&redisHostname, "redis", "localhost:6379", "The redis server to connect to")
 	var redisPass string
-	flag.StringVar(&redisPass, "redisPass", "", "The password for the redis server")
+	env_flag.StringVar(&redisPass, "redisPass", "", "The password for the redis server")
 
 	// meili is shared by server and process mode and used as search index
 	var meiliHostname string
-	flag.StringVar(&meiliHostname, "meilihost", "http://localhost:7700", "The meilisearch server to connect to")
+	env_flag.StringVar(&meiliHostname, "meilihost", "http://localhost:7700", "The meilisearch server to connect to")
 	var meiliKey string
-	flag.StringVar(&meiliKey, "meilikey", "", "The meilisearch master-key to use")
+	env_flag.StringVar(&meiliKey, "meilikey", "", "The meilisearch master-key to use")
 
 	// process mode is used to process the images
 	var imageDir string
-	flag.StringVar(&imageDir, "imageDir", "./images/", "The directory to store images in")
+	env_flag.StringVar(&imageDir, "imageDir", "./images/", "The directory to store images in")
 
 	// server mode
 	var port int
-	flag.IntVar(&port, "port", 9000, "The port to run the server on")
+	env_flag.IntVar(&port, "port", 9000, "The port to run the server on")
 
 	var adminToken string
-	flag.StringVar(&adminToken, "admin-token", "", "The admin token to use for the GraphQL API")
+	env_flag.StringVar(&adminToken, "admin-token", "", "The admin token to use for the GraphQL API")
 	if adminToken == "" {
 		log.Warning("No admin token set, access to administrative features will be disabled")
 	}
 
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
-	flag.Parse()
+	env_flag.Parse()
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)

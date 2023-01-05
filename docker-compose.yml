@@ -11,7 +11,7 @@ services:
     ports:
       - "80:80"
       # this exposes the traefik dashboard, disable in prod
-      - "127.0.0.1:8080:8080"
+      - "8888:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     depends_on:
@@ -44,13 +44,11 @@ services:
     depends_on:
       - redis
       - meilisearch
+    env_file:
+      - .env
     environment:
       - MODE=server
-      - REDIS=redis:6379
-      - MEILIHOST=http://meilisearch:7700
-      - MEILIKEY=meiliKey
-      - IMAGEDIR=/home/paktum/images/
-      - ADMIN_TOKEN=test
+      - LOG_LEVEL=debug
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.paktum.rule=Host(`paktum.localtest.me`)"
@@ -64,21 +62,20 @@ services:
     depends_on:
       - redis
       - meilisearch
-    command:
-      - "--mode=process"
-      - "--redis=redis:6379"
-      - "--meilihost=http://meilisearch:7700"
-      - "--meilikey=meiliKey"
-      - "--imageDir=/home/paktum/images/"
+    env_file:
+      - .env
+    environment:
+        - MODE=process
 
   image_scraper:
     image: privateger/paktum:master
     restart: "no"
     depends_on:
       - redis
-    command:
-      - "--mode=scrape"
-      - "--redis=redis:6379"
+    env_file:
+      - .env
+    environment:
+        - MODE=scrape
     profiles:
       - donotstart
 
@@ -87,13 +84,10 @@ services:
     restart: "no"
     depends_on:
       - meilisearch
+    env_file:
+      - .env
     environment:
-      - "LOG_LEVEL=DEBUG"
-    command:
-      - "--mode=cleanup"
-      - "--meilihost=http://meilisearch:7700"
-      - "--redis=redis:6379"
-      - "--meilikey=meiliKey"
+        - MODE=cleanup
     profiles:
       - donotstart
   imgproxy:
