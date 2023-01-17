@@ -67,7 +67,7 @@ func RemoveImagesWithBadTags(imageDir string) {
 		return
 	}
 
-	if waitForMeilisearchTask(taskInfo) {
+	if Database.WaitForMeilisearchTask(taskInfo) {
 		log.Info("Successfully removed ", len(toDelete), " images with banned tags")
 	} else {
 		log.Error("Failed to remove images with banned tags")

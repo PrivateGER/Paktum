@@ -9,7 +9,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/meilisearch/meilisearch-go"
 	log "github.com/sirupsen/logrus"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -25,37 +24,7 @@ func ProcessMode(imageDir string) {
 	// process images, check for duplicates
 	// send to meili
 
-	task, err := Database.GetMeiliClient().CreateIndex(&meilisearch.IndexConfig{
-		Uid:        "images",
-		PrimaryKey: "ID",
-	})
-	if err != nil {
-		log.Fatal("Failed to create MeiliSearch index:", err)
-	}
-	if !waitForMeilisearchTask(task) {
-		log.Fatal("Failed to create MeiliSearch index")
-	}
-
-	imageCollection := Database.GetMeiliClient().Index("images")
-	task, err = imageCollection.UpdateFilterableAttributes(&[]string{"ID", "Tagstring", "Rating", "Tags", "Filename"})
-	if err != nil {
-		log.Fatal("Failed to update filterable attributes:", err)
-	}
-	if !waitForMeilisearchTask(task) {
-		os.Exit(1)
-		return
-	}
-	log.Println("Filterable attributes updated")
-
-	task, err = imageCollection.UpdateSortableAttributes(&[]string{"Added"})
-	if err != nil {
-		log.Fatal("Failed to update sortable attributes:", err)
-	}
-	if !waitForMeilisearchTask(task) {
-		os.Exit(1)
-		return
-	}
-	log.Println("Sortable attributes updated")
+	Database.ExecuteMigrations()
 
 	for {
 		// read from redis
@@ -98,6 +67,8 @@ func ProcessMode(imageDir string) {
 		wrappedMeiliDocs := WrappedMeiliDocs{
 			Docs: make([]Database.ImageEntry, 0, len(images)),
 		}
+
+		imageCollection := Database.GetMeiliClient().Index("images")
 
 		for _, image := range images {
 			wg.Add(1)

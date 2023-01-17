@@ -275,27 +275,3 @@ func downloadImage(url string, imageDir string, filename string) (error, uint64,
 
 	return nil, GeneratePHash(decodedImage), size, decodedImage.Bounds().Dx(), decodedImage.Bounds().Dy()
 }
-
-func waitForMeilisearchTask(info *meilisearch.TaskInfo) bool {
-	client := Database.GetMeiliClient()
-
-	for {
-		task, err := client.GetTask(info.TaskUID)
-
-		if err != nil {
-			log.Fatal("Failed to get task:", err)
-			return false
-		}
-		if task.Status == "failed" {
-			if task.Error.Code == "index_already_exists" {
-				return true
-			}
-			log.Error("MeiliSearch task failed:", task.Error.Message, "-", task.Error.Code)
-			return false
-		}
-		if task.Status == "succeeded" {
-			return true
-		}
-		time.Sleep(time.Millisecond * 500)
-	}
-}
