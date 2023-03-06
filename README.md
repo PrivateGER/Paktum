@@ -1,5 +1,5 @@
 # Paktum
-<img src="logo.png" width="150" height="300" align="right" alt="Paktum's mascot">
+<!--<img src="logo.png" width="150" height="300" align="right" alt="Paktum's mascot">-->
 
 Paktum is a simple image-server with scraping functionality, ability to detect variants/duplicates using perceptual hashing, tag-based and full text search and can generate thumbnails using imgproxy. It currently features a REST and GraphQL API, documented below.
 
