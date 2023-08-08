@@ -33,7 +33,7 @@ COPY .gi[t] ./.git
 RUN go generate ./...
 RUN go build -v -o Paktum Paktum
 
-FROM alpine:latest
+FROM alpine:3.18.3
 LABEL maintainer="privateger@privateger.me"
 
 # Install updates & packages
